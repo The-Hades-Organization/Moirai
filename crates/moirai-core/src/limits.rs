@@ -4,8 +4,10 @@
 //! Só leitura: o Rust não grava `samples.jsonl` nem `usage/cache.json` (decisão do dono, plano §4.3-1). Sem amostra
 //! não há leitura de transcript.
 
+use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 use std::time::UNIX_EPOCH;
 
 use hades_core::config::config_value;
@@ -805,6 +807,45 @@ fn mtime_day(path: &Path) -> Option<String> {
     Some(iso_from_epoch(secs)[..10].to_owned())
 }
 
+type ChaveDoArquivo = (u64, i128, u64);
+type CacheDeRequisicoes = HashMap<PathBuf, (ChaveDoArquivo, Vec<Req>)>;
+
+/// Cache em memória das requisições por transcript, chaveado por tamanho, mtime e `since_ms`: o app relê `limits_now`
+/// a cada ~30 s e, sem isto, reparseia GBs de transcripts a cada leitura. Só o que mudou desde a última leitura
+/// (a sessão ativa) volta a ser parseado. Extensão do Rust: o TS roda uma vez por processo e não precisa disto.
+static CACHE_REQS: Mutex<Option<CacheDeRequisicoes>> = Mutex::new(None);
+
+fn chave_do_arquivo(path: &Path, since_ms: f64) -> Option<ChaveDoArquivo> {
+    let meta = fs::metadata(path).ok()?;
+    let mtime_ns = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_nanos() as i128);
+    Some((meta.len(), mtime_ns, since_ms.to_bits()))
+}
+
+fn requisicoes_do_arquivo(path: &Path, rules: &GuardRules, since_ms: f64) -> Vec<Req> {
+    let Some(chave) = chave_do_arquivo(path, since_ms) else {
+        return parse_file_full(path, rules, since_ms).1;
+    };
+    {
+        let cache = CACHE_REQS.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some((k, reqs)) = cache.as_ref().and_then(|m| m.get(path))
+            && *k == chave
+        {
+            return reqs.clone();
+        }
+    }
+    let reqs = parse_file_full(path, rules, since_ms).1;
+    CACHE_REQS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get_or_insert_with(HashMap::new)
+        .insert(path.to_path_buf(), (chave, reqs.clone()));
+    reqs
+}
+
 /// `limitsNow` (`usage.ts:332`): medida atual e calibração para quem não lista consumo (`moirai estimate`); sem
 /// amostra não lê transcript. Não grava `usage/cache.json`: relê os transcripts do dia da amostra mais antiga.
 pub fn limits_now(env: &Env, cwd: &Path) -> Result<LimitsNow, HadesError> {
@@ -831,7 +872,7 @@ pub fn limits_now(env: &Env, cwd: &Path) -> Result<LimitsNow, HadesError> {
         if day < load_since {
             continue;
         }
-        reqs.extend(parse_file_full(&path, &rules, since_ms).1);
+        reqs.extend(requisicoes_do_arquivo(&path, &rules, since_ms));
     }
     let calibracao = calibra(&amostras, &reqs, &k.opcoes);
     let total = amostras.len();

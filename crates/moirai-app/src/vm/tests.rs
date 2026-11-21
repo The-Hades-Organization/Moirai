@@ -490,3 +490,47 @@ fn dado_a_mesma_assinatura_entao_a_gravacao_nao_dispara_releitura() {
 fn dado_a_coluna_de_percentual_entao_e_numerica() {
     assert!(coluna_numerica("% do p75"));
 }
+
+#[test]
+fn dado_tarefa_em_voo_entao_a_renovacao_pula() {
+    let mut t = Tarefa::default();
+    let g = t.iniciar().unwrap();
+    assert!(t.carregando());
+    assert_eq!(t.iniciar(), None);
+    assert!(t.concluir(g));
+    assert!(!t.carregando());
+    assert!(t.iniciar().is_some());
+}
+
+#[test]
+fn dado_resultado_de_geracao_velha_entao_e_descartado_sem_liberar_a_nova() {
+    let mut t = Tarefa::default();
+    let velha = t.iniciar().unwrap();
+    t.invalidar();
+    let nova = t.iniciar().unwrap();
+    assert_ne!(velha, nova);
+    assert!(!t.concluir(velha));
+    assert!(t.carregando());
+    assert!(t.concluir(nova));
+    assert!(!t.carregando());
+}
+
+#[test]
+fn dado_calculo_em_outra_thread_entao_o_resultado_chega_pelo_controle_da_tarefa() {
+    let dir = std::env::temp_dir().join(format!("moirai-vm-{}", std::process::id()));
+    let env = hades_core::Env::empty().with("HOME", dir.to_str().unwrap());
+    let painel = std::sync::Arc::new(std::sync::Mutex::new(crate::service::novo_painel(
+        &env, &dir,
+    )));
+    let mut t = Tarefa::default();
+    let g = t.iniciar().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let p = std::sync::Arc::clone(&painel);
+    std::thread::spawn(move || {
+        let plano = p.lock().unwrap().plan();
+        tx.send((g, linhas_teto(&plano), limiares(&plano))).unwrap();
+    });
+    let (geracao, linhas, _) = rx.recv().unwrap();
+    assert!(t.concluir(geracao));
+    assert!(linhas.is_empty());
+}

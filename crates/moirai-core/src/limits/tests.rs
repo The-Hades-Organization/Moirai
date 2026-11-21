@@ -628,6 +628,31 @@ mod borda {
     }
 
     #[test]
+    fn dado_transcript_que_cresce_entao_o_cache_reparseia_so_o_que_mudou() {
+        let (dir, env) = home();
+        let projeto = dir.path().join(".claude/projects/p");
+        fs::create_dir_all(&projeto).unwrap();
+        let arquivo = projeto.join("s.jsonl");
+        let turno = |id: &str, s: i64| {
+            json!({"type": "assistant", "requestId": id, "timestamp": at(s), "sessionId": "s", "cwd": "/x",
+                   "message": {"model": "claude-opus-5-5",
+                               "usage": {"input_tokens": 1_000_000, "output_tokens": 0}}})
+            .to_string()
+        };
+        fs::write(&arquivo, format!("{}\n", turno("a", T0 - 300))).unwrap();
+        let rules = GuardRules::load(&env).unwrap();
+        let antes = requisicoes_do_arquivo(&arquivo, &rules, 0.0);
+        assert_eq!(antes.len(), 1);
+        assert_eq!(requisicoes_do_arquivo(&arquivo, &rules, 0.0), antes);
+        fs::write(
+            &arquivo,
+            format!("{}\n{}\n", turno("a", T0 - 300), turno("b", T0 - 200)),
+        )
+        .unwrap();
+        assert_eq!(requisicoes_do_arquivo(&arquivo, &rules, 0.0).len(), 2);
+    }
+
+    #[test]
     fn dado_poucas_amostras_entao_mostra_o_medido_e_a_calibracao_fica_sem_taxa() {
         let (dir, env) = home();
         let fecha = T0 + 3 * 3600;

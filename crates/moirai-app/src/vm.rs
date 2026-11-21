@@ -640,5 +640,43 @@ pub fn tela_da_tecla(tecla: &str) -> Option<Tela> {
     Tela::TODAS.get(n.checked_sub(1)?).copied()
 }
 
+/// Controle de uma tarefa de fundo: no máximo uma em voo (a renovação periódica pula se a anterior não acabou) e
+/// resultado de uma geração velha é descartado (`invalidar` quando a entrada mudou: outro plano, outro modo).
+#[derive(Debug, Default)]
+pub struct Tarefa {
+    geracao: u64,
+    em_voo: bool,
+}
+
+impl Tarefa {
+    /// Geração da nova execução, ou `None` se a anterior ainda não terminou.
+    pub fn iniciar(&mut self) -> Option<u64> {
+        if self.em_voo {
+            return None;
+        }
+        self.em_voo = true;
+        Some(self.geracao)
+    }
+
+    /// Descarta o que estiver em voo e libera uma nova execução.
+    pub fn invalidar(&mut self) {
+        self.geracao = self.geracao.wrapping_add(1);
+        self.em_voo = false;
+    }
+
+    /// `true` se o resultado da geração `geracao` ainda vale; só então libera a próxima execução.
+    pub fn concluir(&mut self, geracao: u64) -> bool {
+        if geracao != self.geracao {
+            return false;
+        }
+        self.em_voo = false;
+        true
+    }
+
+    pub fn carregando(&self) -> bool {
+        self.em_voo
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -181,10 +181,10 @@ pub struct Registry {
 
 /// `MoiraiDeps` (`src/panel/moirai.ts:29`). `now_ms` é o relógio em ms desde a época.
 pub struct MoiraiDeps {
-    pub registries: Box<dyn Fn() -> Vec<Registry>>,
-    pub config: Box<dyn Fn() -> HashMap<String, String>>,
+    pub registries: Box<dyn Fn() -> Vec<Registry> + Send>,
+    pub config: Box<dyn Fn() -> HashMap<String, String> + Send>,
     pub projects_dir: PathBuf,
-    pub now_ms: Box<dyn Fn() -> f64>,
+    pub now_ms: Box<dyn Fn() -> f64 + Send>,
 }
 
 /// Rotas `GET /api/moirai/plan` e `/unit/:nome`, só leitura. O nome só chega aos transcripts depois de achado por

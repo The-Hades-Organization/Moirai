@@ -342,3 +342,151 @@ fn colunas_numericas() {
     assert!(coluna_numerica("Duração"));
     assert!(!coluna_numerica("Papel"));
 }
+
+fn painel_json() -> serde_json::Value {
+    serde_json::json!({
+        "v": 1, "warnPct": 100, "askPct": 150,
+        "plans": [{
+            "registry": "proj", "path": "/p.md", "approved": true,
+            "units": [
+                {"unit": "a", "estimate": {"costP75": 2.0}, "real": {"costUsd": 1.0, "state": "rodando"}, "pct": 50.0, "level": "ok"},
+                {"unit": "b", "estimate": {"costP75": 1.0}, "real": {"costUsd": 2.0, "state": "rodando"}, "pct": 200.0, "level": "ask"},
+                {"unit": "c", "estimate": null, "real": {"costUsd": 0.5, "state": null}, "pct": null, "level": null},
+                {"unit": "d", "estimate": {"costP75": 3.0}, "real": null, "pct": null, "level": null},
+                {"unit": "e", "estimate": {"costP75": 1.0}, "real": {"costUsd": 1.2, "state": "rodando"}, "pct": 120.0, "level": "warn"}
+            ]
+        }]
+    })
+}
+
+#[test]
+fn dado_o_json_do_painel_entao_so_unidade_com_custo_real_entra_da_mais_estourada() {
+    let nomes: Vec<String> = linhas_teto(&painel_json())
+        .into_iter()
+        .map(|l| l.unidade)
+        .collect();
+    assert_eq!(nomes, ["b", "e", "a", "c"]);
+}
+
+#[test]
+fn dado_unidade_sem_estimativa_entao_celulas_mostram_travessao_e_sem_estimativa() {
+    let linhas = linhas_teto(&painel_json());
+    let c = linhas.iter().find(|l| l.unidade == "c").unwrap();
+    assert_eq!(
+        celulas_teto(c),
+        ["c", "proj", "—", "US$ 0,50", "—", "—", "sem estimativa"]
+    );
+}
+
+#[test]
+fn dado_um_nivel_entao_o_tom_e_bad_so_ao_estourar_a_pergunta() {
+    use moirai_core::budget::BudgetLevel::{Ask, Ok, Warn};
+    assert_eq!(tom_do_nivel(Some(Ask)), Tone::Bad);
+    assert_eq!(tom_do_nivel(Some(Warn)), Tone::Warn);
+    assert_eq!(tom_do_nivel(Some(Ok)), Tone::Ok);
+    assert_eq!(tom_do_nivel(None), Tone::Neutral);
+}
+
+#[test]
+fn dado_json_sem_planos_entao_a_lista_fica_vazia_e_limiares_vem_do_painel() {
+    assert!(linhas_teto(&serde_json::json!({})).is_empty());
+    assert_eq!(limiares(&painel_json()), Some((100.0, 150.0)));
+    assert_eq!(limiares(&serde_json::json!({})), None);
+}
+
+#[test]
+fn dado_o_instante_de_renovacao_entao_o_texto_usa_a_maior_unidade() {
+    let agora = 1_000_000.0 * 1000.0;
+    assert_eq!(renovacao(1_000_000.0 - 5.0, agora), "renovando agora");
+    assert_eq!(
+        renovacao(1_000_000.0 + 25.0 * 60.0, agora),
+        "renova em 25min"
+    );
+    assert_eq!(
+        renovacao(1_000_000.0 + 135.0 * 60.0, agora),
+        "renova em 2h15"
+    );
+    assert_eq!(
+        renovacao(1_000_000.0 + 3.0 * 86_400.0 + 5.0 * 3600.0, agora),
+        "renova em 3d 5h"
+    );
+}
+
+#[test]
+fn dado_janela_sem_medida_entao_o_cartao_diz_sem_medida() {
+    let limite = LimiteDoPlano {
+        por_unidade: Default::default(),
+        plano: None,
+        completo: true,
+        atual: None,
+        resta: None,
+        cabe: None,
+    };
+    let c = cartao_da_janela(Janela::Five, &limite, 0.0);
+    assert_eq!(c.renovacao, "sem medida");
+    assert_eq!(c.plano, "plano aberto sem estimativa calibrada");
+    assert_eq!(c.medidor.texto, "sem medida");
+}
+
+#[test]
+fn dado_plano_parcial_entao_o_cartao_marca_parcial_e_mostra_a_faixa() {
+    let limite = LimiteDoPlano {
+        por_unidade: Default::default(),
+        plano: Some(Faixa {
+            p25: 4.0,
+            median: 6.0,
+            p75: 9.0,
+        }),
+        completo: false,
+        atual: Some(Atual {
+            pct: 40.0,
+            resets_at: 1_000_600.0,
+            at: "x".into(),
+        }),
+        resta: None,
+        cabe: Some(true),
+    };
+    let c = cartao_da_janela(Janela::Seven, &limite, 1_000_000.0 * 1000.0);
+    assert_eq!(c.plano, "plano aberto: ~4% a ~9% (parcial)");
+    assert_eq!(c.renovacao, "renova em 10min");
+}
+
+#[test]
+fn dado_duas_janelas_entao_a_linha_do_status_junta_com_ponto_medio() {
+    let a = Atual {
+        pct: 42.0,
+        resets_at: 1.0,
+        at: "x".into(),
+    };
+    let linha = linha_das_janelas(&[(Janela::Five, Some(&a)), (Janela::Seven, None)]);
+    assert_eq!(
+        linha,
+        format!(
+            "{} 42% · {} sem medida",
+            Janela::Five.rotulo(),
+            Janela::Seven.rotulo()
+        )
+    );
+}
+
+#[test]
+fn dado_a_mesma_assinatura_entao_a_gravacao_nao_dispara_releitura() {
+    let a = Assinatura {
+        bytes: 10,
+        mtime_ms: 5,
+    };
+    assert!(!mudou(Some(a), Some(a)));
+    assert!(mudou(
+        Some(a),
+        Some(Assinatura {
+            bytes: 11,
+            mtime_ms: 5
+        })
+    ));
+    assert!(mudou(Some(a), None));
+}
+
+#[test]
+fn dado_a_coluna_de_percentual_entao_e_numerica() {
+    assert!(coluna_numerica("% do p75"));
+}

@@ -1,5 +1,6 @@
 //! View-model do app: formatação, ordenação, filtro e tons, sem janela nem I/O.
 
+use moirai_core::budget::BudgetLevel;
 use moirai_core::limits::{Atual, Faixa, Janela, LimiteDoPlano};
 use moirai_core::model::{Band, HistoryUnit, Mode, UnitEstimate};
 
@@ -453,12 +454,187 @@ pub fn medidor(janela: Janela, limite: &LimiteDoPlano) -> MedidorJanela {
     }
 }
 
-/// Colunas de número: custo, duração e gate (alinhadas à direita, em mono).
-pub fn coluna_numerica(nome: &str) -> bool {
-    nome.starts_with("US$") || nome == "Duração" || nome == "Gate"
+pub const COLUNAS_TETO: [&str; 7] = [
+    "Unidade", "Plano", "Estado", "US$ real", "US$ p75", "% do p75", "Nível",
+];
+
+/// Uma unidade com custo real medido contra o p75 da estimativa (`GET /api/moirai/plan`, `src/panel/moirai.ts:104`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct LinhaTeto {
+    pub unidade: String,
+    pub plano: String,
+    pub aprovado: bool,
+    pub estado: Option<String>,
+    pub custo_real: f64,
+    pub p75: Option<f64>,
+    pub pct: Option<f64>,
+    pub nivel: Option<BudgetLevel>,
 }
 
-/// Teclas 1 a 4 trocam de tela (o `Rail` do `hades-ui` v0.1.0 não tem clique).
+fn texto_de<'a>(v: &'a serde_json::Value, chave: &str) -> Option<&'a str> {
+    v.get(chave).and_then(serde_json::Value::as_str)
+}
+
+/// Linhas do teto a partir do JSON de `MoiraiRoutes::plan`: só unidade com agente (custo real), da mais estourada
+/// para a menos; sem p75 vão para o fim.
+pub fn linhas_teto(plano: &serde_json::Value) -> Vec<LinhaTeto> {
+    let mut linhas = Vec::new();
+    let planos = plano.get("plans").and_then(serde_json::Value::as_array);
+    for p in planos.into_iter().flatten() {
+        let registro = texto_de(p, "registry").unwrap_or_default();
+        let aprovado = p.get("approved").and_then(serde_json::Value::as_bool) == Some(true);
+        let unidades = p.get("units").and_then(serde_json::Value::as_array);
+        for u in unidades.into_iter().flatten() {
+            let Some(real) = u.get("real").filter(|r| r.is_object()) else {
+                continue;
+            };
+            let nivel = match texto_de(u, "level") {
+                Some("ask") => Some(BudgetLevel::Ask),
+                Some("warn") => Some(BudgetLevel::Warn),
+                Some("ok") => Some(BudgetLevel::Ok),
+                _ => None,
+            };
+            linhas.push(LinhaTeto {
+                unidade: texto_de(u, "unit").unwrap_or_default().to_owned(),
+                plano: registro.to_owned(),
+                aprovado,
+                estado: texto_de(real, "state").map(str::to_owned),
+                custo_real: real
+                    .get("costUsd")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0),
+                p75: u
+                    .get("estimate")
+                    .and_then(|e| e.get("costP75"))
+                    .and_then(serde_json::Value::as_f64),
+                pct: u.get("pct").and_then(serde_json::Value::as_f64),
+                nivel,
+            });
+        }
+    }
+    linhas.sort_by(|a, b| match (a.pct, b.pct) {
+        (Some(x), Some(y)) => y.total_cmp(&x),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => b.custo_real.total_cmp(&a.custo_real),
+    });
+    linhas
+}
+
+/// `warn` ao passar do limiar de aviso e `bad` ao passar do limiar de pergunta (o custo já foi medido).
+pub fn tom_do_nivel(nivel: Option<BudgetLevel>) -> Tone {
+    match nivel {
+        Some(BudgetLevel::Ask) => Tone::Bad,
+        Some(BudgetLevel::Warn) => Tone::Warn,
+        Some(BudgetLevel::Ok) => Tone::Ok,
+        None => Tone::Neutral,
+    }
+}
+
+pub fn rotulo_do_nivel(nivel: Option<BudgetLevel>) -> &'static str {
+    match nivel {
+        Some(BudgetLevel::Ask) => "estourou",
+        Some(BudgetLevel::Warn) => "no teto",
+        Some(BudgetLevel::Ok) => "dentro",
+        None => "sem estimativa",
+    }
+}
+
+pub fn celulas_teto(l: &LinhaTeto) -> Vec<String> {
+    vec![
+        l.unidade.clone(),
+        l.plano.clone(),
+        l.estado.clone().unwrap_or_else(|| "—".to_owned()),
+        usd(l.custo_real),
+        usd_celula(l.p75),
+        l.pct.map_or_else(|| "—".to_owned(), pct_texto),
+        rotulo_do_nivel(l.nivel).to_owned(),
+    ]
+}
+
+/// Limiares de aviso e pergunta do painel (`GET /api/moirai/plan`: `warnPct`, `askPct`).
+pub fn limiares(plano: &serde_json::Value) -> Option<(f64, f64)> {
+    Some((
+        plano.get("warnPct")?.as_f64()?,
+        plano.get("askPct")?.as_f64()?,
+    ))
+}
+
+/// Quanto falta para a janela renovar (`resets_at` em segundos desde a época, `agora_ms` em ms).
+pub fn renovacao(resets_at_s: f64, agora_ms: f64) -> String {
+    let falta_min = (resets_at_s - agora_ms / 1000.0) / 60.0;
+    if falta_min <= 0.0 {
+        return "renovando agora".to_owned();
+    }
+    let total = falta_min.round() as i64;
+    match (total / 1440, total % 1440 / 60, total % 60) {
+        (0, 0, m) => format!("renova em {m}min"),
+        (0, h, m) => format!("renova em {h}h{m:02}"),
+        (d, h, _) => format!("renova em {d}d {h}h"),
+    }
+}
+
+/// Cartão de uma janela: medidor, renovação e quanto o plano aberto consome.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CartaoJanela {
+    pub medidor: MedidorJanela,
+    pub renovacao: String,
+    pub plano: String,
+}
+
+pub fn cartao_da_janela(janela: Janela, limite: &LimiteDoPlano, agora_ms: f64) -> CartaoJanela {
+    let renovacao = limite.atual.as_ref().map_or_else(
+        || "sem medida".to_owned(),
+        |a| renovacao(a.resets_at, agora_ms),
+    );
+    let plano = match limite.plano {
+        None => "plano aberto sem estimativa calibrada".to_owned(),
+        Some(f) => format!(
+            "plano aberto: ~{}% a ~{}%{}",
+            numero(f.p25, 0),
+            numero(f.p75, 0),
+            if limite.completo { "" } else { " (parcial)" }
+        ),
+    };
+    CartaoJanela {
+        medidor: medidor(janela, limite),
+        renovacao,
+        plano,
+    }
+}
+
+/// Linha de status das janelas, no estilo do terminal: `5 h 42% · semana 18%`.
+pub fn linha_das_janelas(limites: &[(Janela, Option<&Atual>)]) -> String {
+    limites
+        .iter()
+        .map(|(j, a)| {
+            format!(
+                "{} {}",
+                j.rotulo(),
+                a.map_or_else(|| "sem medida".to_owned(), |a| pct_texto(a.pct))
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+/// Assinatura do plano no disco (tamanho e mtime) para o watcher só reestimar quando mudou de fato.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Assinatura {
+    pub bytes: u64,
+    pub mtime_ms: i128,
+}
+
+pub fn mudou(antes: Option<Assinatura>, agora: Option<Assinatura>) -> bool {
+    antes != agora
+}
+
+/// Colunas de número: custo, duração e gate (alinhadas à direita, em mono).
+pub fn coluna_numerica(nome: &str) -> bool {
+    nome.starts_with("US$") || nome == "% do p75" || nome == "Duração" || nome == "Gate"
+}
+
+/// Atalho: teclas 1 a 4 trocam de tela, como o clique no `Rail`.
 pub fn tela_da_tecla(tecla: &str) -> Option<Tela> {
     let n: usize = tecla.parse().ok()?;
     Tela::TODAS.get(n.checked_sub(1)?).copied()

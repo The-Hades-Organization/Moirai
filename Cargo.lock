@@ -1478,7 +1478,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2659,8 +2659,8 @@ dependencies = [
 
 [[package]]
 name = "hades-ui"
-version = "0.1.0"
-source = "git+https://github.com/The-Hades-Organization/Hades-UI?tag=v0.1.0#02279a906eb6bf92dfadcaa6f32160ac1660cf80"
+version = "0.1.1"
+source = "git+https://github.com/The-Hades-Organization/Hades-UI?tag=v0.1.1#e1264b6415a87f43df873b7af5abef59c40f33a3"
 dependencies = [
  "gpui-component",
  "gpui-pre",
@@ -3741,6 +3741,8 @@ dependencies = [
  "hades-core",
  "hades-ui",
  "moirai-core",
+ "notify",
+ "serde_json",
 ]
 
 [[package]]
@@ -4947,7 +4949,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5466,7 +5468,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6258,7 +6260,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7312,7 +7314,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

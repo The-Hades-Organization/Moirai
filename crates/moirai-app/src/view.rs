@@ -1,6 +1,9 @@
 //! `MoiraiView`: casca (topo, rail, status) e as telas Estimar plano e Histórico.
 
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
@@ -8,15 +11,21 @@ use gpui::{
 };
 use hades_core::Env;
 use hades_ui::components::{
-    Align, Button, Confirm, DataTable, EmptyState, FilterBar, Kpi, KpiStrip, Meter, PageHeader,
-    PathField, Rail, RailGroup, RailItem, Segmented, SortDirection, StatusBar, TopBar,
+    Align, Button, Card, Confirm, DataTable, EmptyState, FilterBar, Kpi, KpiStrip, Meter,
+    PageHeader, PathField, Rail, RailGroup, RailItem, Segmented, SortDirection, StatusBadge,
+    StatusBar, TermBlock, TopBar,
 };
 use hades_ui::palette;
-use moirai_core::limits::JANELAS;
+use moirai_core::budget::MoiraiRoutes;
+use moirai_core::limits::{JANELAS, LimitesDoPlano};
 use moirai_core::model::{HistoryUnit, Mode, Params};
+use notify::{RecursiveMode, Watcher};
 
 use crate::service::{self, Estimativa};
-use crate::vm::{self, COLUNAS_ESTIMAR, COLUNAS_HISTORICO, Chip, Direcao, Filtros, Ordem, Tela};
+use crate::vm::{
+    self, Assinatura, COLUNAS_ESTIMAR, COLUNAS_HISTORICO, COLUNAS_TETO, Chip, Direcao, Filtros,
+    Ordem, Tela,
+};
 
 pub struct MoiraiView {
     env: Env,
@@ -35,13 +44,25 @@ pub struct MoiraiView {
     confirmando: bool,
     aviso: Option<String>,
     foco: FocusHandle,
+    painel: MoiraiRoutes,
+    teto: Vec<vm::LinhaTeto>,
+    limiares: Option<(f64, f64)>,
+    selecao_teto: Option<usize>,
+    janelas: Option<LimitesDoPlano>,
+    agora_ms: f64,
+    sujo: Arc<AtomicBool>,
+    observador: Option<notify::RecommendedWatcher>,
+    assinatura: Option<Assinatura>,
+    tique: u32,
 }
+
+const PERIODO_MS: u64 = 500;
+const TIQUES_TETO: u32 = 6;
+const TIQUES_JANELAS: u32 = 60;
 
 impl MoiraiView {
     pub fn new(env: Env, cwd: PathBuf, foco: FocusHandle) -> Self {
         let mut view = Self {
-            env,
-            cwd,
             tela: Tela::Estimar,
             params: None,
             historico: Vec::new(),
@@ -56,8 +77,21 @@ impl MoiraiView {
             confirmando: false,
             aviso: None,
             foco,
+            painel: service::novo_painel(&env, &cwd),
+            teto: Vec::new(),
+            limiares: None,
+            selecao_teto: None,
+            janelas: None,
+            agora_ms: 0.0,
+            sujo: Arc::new(AtomicBool::new(false)),
+            observador: None,
+            assinatura: None,
+            tique: 0,
+            env,
+            cwd,
         };
         view.recarregar_historico();
+        view.atualizar_teto();
         view
     }
 
@@ -102,8 +136,110 @@ impl MoiraiView {
 
     fn abrir_plano(&mut self, caminho: PathBuf) {
         self.modo = service::modo_padrao(&self.env, &caminho);
+        self.observar(&caminho);
         self.plano = Some(caminho);
         self.reestimar();
+    }
+
+    /// Vigia a pasta do plano: toda gravação (do editor ou do próprio app) marca `sujo`.
+    fn observar(&mut self, caminho: &std::path::Path) {
+        self.observador = None;
+        let Some(pasta) = caminho.parent() else {
+            return;
+        };
+        let sujo = Arc::clone(&self.sujo);
+        let alvo = caminho.file_name().map(std::ffi::OsStr::to_owned);
+        let observador = notify::recommended_watcher(move |ev: notify::Result<notify::Event>| {
+            if let Ok(ev) = ev
+                && ev.paths.iter().any(|p| p.file_name() == alvo.as_deref())
+            {
+                sujo.store(true, Ordering::Release);
+            }
+        });
+        match observador {
+            Ok(mut w) => match w.watch(pasta, RecursiveMode::NonRecursive) {
+                Ok(()) => self.observador = Some(w),
+                Err(e) => self.aviso = Some(format!("sem releitura automática: {e}")),
+            },
+            Err(e) => self.aviso = Some(format!("sem releitura automática: {e}")),
+        }
+        self.assinatura = service::assinatura(caminho);
+    }
+
+    /// Relê o plano se a gravação mudou o arquivo de fato (tamanho ou mtime).
+    fn reler_se_mudou(&mut self) -> bool {
+        if !self.sujo.swap(false, Ordering::AcqRel) {
+            return false;
+        }
+        let Some(plano) = self.plano.clone() else {
+            return false;
+        };
+        let agora = service::assinatura(&plano);
+        if !vm::mudou(self.assinatura, agora) {
+            return false;
+        }
+        self.assinatura = agora;
+        self.reestimar();
+        true
+    }
+
+    fn atualizar_teto(&mut self) {
+        let plano = self.painel.plan();
+        self.teto = vm::linhas_teto(&plano);
+        self.limiares = vm::limiares(&plano);
+        self.selecao_teto = None;
+    }
+
+    fn atualizar_janelas(&mut self) {
+        self.agora_ms = service::agora_ms(&self.env);
+        let est: &[_] = self.estimativa.as_ref().map_or(&[], |e| &e.estimativas);
+        match service::janelas(&self.env, &self.cwd, est) {
+            Ok(j) => self.janelas = Some(j),
+            Err(e) => self.aviso = Some(e.to_string()),
+        }
+    }
+
+    /// Um tique do laço de fundo: relê o plano gravado e renova Teto ao vivo e Janelas na tela aberta.
+    fn tiquetaque(&mut self) -> bool {
+        self.tique = self.tique.wrapping_add(1);
+        let mut mudou = self.reler_se_mudou();
+        if self.tela == Tela::Teto && self.tique.is_multiple_of(TIQUES_TETO) {
+            self.atualizar_teto();
+            mudou = true;
+        }
+        if self.tela == Tela::Janelas && self.tique.is_multiple_of(TIQUES_JANELAS) {
+            self.atualizar_janelas();
+            mudou = true;
+        }
+        mudou
+    }
+
+    fn mudar_tela(&mut self, tela: Tela) {
+        self.tela = tela;
+        match tela {
+            Tela::Teto => self.atualizar_teto(),
+            Tela::Janelas => self.atualizar_janelas(),
+            _ => {}
+        }
+    }
+
+    pub fn iniciar(cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(PERIODO_MS))
+                    .await;
+                let vivo = this.update(cx, |v, cx| {
+                    if v.tiquetaque() {
+                        cx.notify();
+                    }
+                });
+                if vivo.is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     fn gravar(&mut self) {
@@ -119,6 +255,10 @@ impl MoiraiView {
                 Err(err) => err.to_string(),
             },
         );
+        if let Some(p) = &self.plano {
+            self.assinatura = service::assinatura(p);
+        }
+        self.sujo.store(false, Ordering::Release);
     }
 
     fn titulo(&self) -> String {
@@ -136,7 +276,8 @@ impl MoiraiView {
         (esquerda, format!("moirai {}", env!("CARGO_PKG_VERSION")))
     }
 
-    fn rail(&self) -> Rail {
+    fn rail(&self, cx: &mut Context<Self>) -> Rail {
+        let entidade = cx.entity();
         let itens = vm::Tela::TODAS.map(|t| {
             let item = RailItem::new(t.rotulo());
             if t == Tela::Historico {
@@ -145,7 +286,16 @@ impl MoiraiView {
                 item
             }
         });
-        Rail::new([RailGroup::new("Moirai", itens)]).selected(self.tela.rotulo())
+        Rail::new([RailGroup::new("Moirai", itens)])
+            .selected(self.tela.rotulo())
+            .on_select(move |rotulo, _, cx| {
+                if let Some(t) = Tela::de_rotulo(rotulo) {
+                    entidade.update(cx, |v, cx| {
+                        v.mudar_tela(t);
+                        cx.notify();
+                    });
+                }
+            })
     }
 
     fn tela_estimar(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
@@ -338,9 +488,94 @@ impl MoiraiView {
         coluna.child(tabela).into_any_element()
     }
 
-    fn tela_em_breve(tela: Tela) -> gpui::AnyElement {
-        EmptyState::new(tela.rotulo())
-            .hint("Esta tela chega na próxima entrega do app.")
+    fn tela_teto(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let entidade = cx.entity();
+        let mut cabecalho = PageHeader::new("Teto ao vivo");
+        if let Some((aviso, pergunta)) = self.limiares {
+            cabecalho = cabecalho.action(StatusBadge::new(
+                format!(
+                    "aviso {}% · pergunta {}%",
+                    vm::numero(aviso, 0),
+                    vm::numero(pergunta, 0)
+                ),
+                hades_ui::Tone::Neutral,
+            ));
+        }
+        let coluna = div().flex().flex_col().gap(px(14.0)).child(cabecalho);
+        if self.teto.is_empty() {
+            return coluna
+                .child(EmptyState::new("Nenhuma unidade em execução").hint(
+                    "Unidades de um plano aprovado aparecem aqui com o custo real contra o p75 estimado.",
+                ))
+                .into_any_element();
+        }
+        let mut tabela = DataTable::new(colunas(&COLUNAS_TETO));
+        for l in &self.teto {
+            tabela = tabela.row(vm::celulas_teto(l).into_iter().map(SharedString::from));
+        }
+        if let Some(i) = self.selecao_teto {
+            tabela = tabela.selected(i);
+        }
+        let tabela = tabela.on_select(move |i, _, cx| {
+            entidade.update(cx, |v, cx| {
+                v.selecao_teto = Some(i);
+                cx.notify();
+            });
+        });
+        let mut medidores = div().flex().flex_col().gap(px(8.0));
+        for l in self.teto.iter().take(8) {
+            let fracao = l.pct.map_or(0.0, |p| (p / 100.0).clamp(0.0, 1.0) as f32);
+            medidores = medidores.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    .child(div().w(px(220.0)).child(l.unidade.clone()))
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(Meter::new(fracao).tone(vm::tom_do_nivel(l.nivel))),
+                    )
+                    .child(StatusBadge::new(
+                        vm::rotulo_do_nivel(l.nivel),
+                        vm::tom_do_nivel(l.nivel),
+                    )),
+            );
+        }
+        coluna.child(medidores).child(tabela).into_any_element()
+    }
+
+    fn tela_janelas(&self) -> gpui::AnyElement {
+        let cabecalho = PageHeader::new("Janelas");
+        let coluna = div().flex().flex_col().gap(px(14.0)).child(cabecalho);
+        let Some(limites) = &self.janelas else {
+            return coluna
+                .child(EmptyState::new("Sem medida").hint(
+                    "Nenhuma leitura de janela do status line ainda; abra uma sessão do Claude Code.",
+                ))
+                .into_any_element();
+        };
+        let mut cartoes = div().flex().gap(px(12.0));
+        let mut atuais = Vec::new();
+        for j in JANELAS {
+            let limite = limites.get(j);
+            let c = vm::cartao_da_janela(j, limite, self.agora_ms);
+            atuais.push((j, limite.atual.as_ref()));
+            cartoes = cartoes.child(
+                div().flex_1().child(
+                    Card::new()
+                        .title(format!("Janela de {}", j.rotulo()))
+                        .child(Meter::new(c.medidor.fracao).tone(c.medidor.tom))
+                        .child(c.medidor.texto)
+                        .child(c.renovacao)
+                        .child(c.plano),
+                ),
+            );
+        }
+        let linha = vm::linha_das_janelas(&atuais);
+        coluna
+            .child(cartoes)
+            .child(TermBlock::new().line(linha))
             .into_any_element()
     }
 }
@@ -370,18 +605,19 @@ impl Render for MoiraiView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = palette(cx);
         let (esquerda, direita) = self.rodape();
-        let rail = self.rail();
+        let rail = self.rail(cx);
         let corpo = match self.tela {
             Tela::Estimar => self.tela_estimar(cx),
             Tela::Historico => self.tela_historico(cx),
-            outra => Self::tela_em_breve(outra),
+            Tela::Teto => self.tela_teto(cx),
+            Tela::Janelas => self.tela_janelas(),
         };
         let mut raiz = div()
             .id("moirai")
             .track_focus(&self.foco)
             .on_key_down(cx.listener(|v, ev: &KeyDownEvent, _, cx| {
                 if let Some(t) = vm::tela_da_tecla(&ev.keystroke.key) {
-                    v.tela = t;
+                    v.mudar_tela(t);
                     cx.notify();
                 }
             }))
@@ -434,8 +670,10 @@ pub fn abrir_janela(cx: &mut App) {
     let aberta = cx.open_window(gpui::WindowOptions::default(), |window, cx| {
         window.set_window_title(crate::NOME);
         let cwd = std::env::current_dir().unwrap_or_default();
-        let view: Entity<MoiraiView> =
-            cx.new(|cx| MoiraiView::new(Env::from_process(), cwd, cx.focus_handle()));
+        let view: Entity<MoiraiView> = cx.new(|cx| {
+            MoiraiView::iniciar(cx);
+            MoiraiView::new(Env::from_process(), cwd, cx.focus_handle())
+        });
         view
     });
     if aberta.is_err() {

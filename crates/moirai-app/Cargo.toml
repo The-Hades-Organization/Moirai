@@ -1,0 +1,23 @@
+[package]
+name = "moirai-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "moirai_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "moirai-app"
+path = "src/main.rs"
+
+[dependencies]
+moirai-core = { path = "../moirai-core" }
+gpui.workspace = true
+gpui_platform.workspace = true
+gpui-component.workspace = true
+
+[lints]
+workspace = true

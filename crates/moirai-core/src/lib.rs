@@ -10,5 +10,6 @@ pub mod params;
 pub mod plan;
 pub mod price;
 pub mod real;
+pub mod report;
 pub mod stats;
 pub mod transcripts;

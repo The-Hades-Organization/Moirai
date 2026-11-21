@@ -128,3 +128,193 @@ argv = ["history", "--json", "extra"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
+
+[[case]]
+id = "estimate.json"
+argv = ["estimate", "@HOME@/plano.md", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.texto"
+argv = ["estimate", "@HOME@/plano.md"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.modo-skill"
+argv = ["estimate", "@HOME@/plano.md", "--mode", "skill", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.modo-projeto"
+argv = ["estimate", "@HOME@/plano.md", "--mode", "projeto", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.modo-padrao-skill"
+argv = ["estimate", "@HOME@/.claude/hades/plans/plano.md", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.specs-card"
+argv = ["estimate", "@HOME@/plano-specs.md", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.sem-historico"
+argv = ["estimate", "@HOME@/plano.md", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+setup = "setup-plano.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "estimate.write"
+argv = ["estimate", "@HOME@/plano.md", "--write", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit", "files:plano.md"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.write-substitui"
+argv = ["estimate", "@HOME@/plano-secao.md", "--write", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit", "files:plano-secao.md"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.write-sem-historico"
+argv = ["estimate", "@HOME@/plano-secao.md", "--write"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["exit", "files:plano-secao.md"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.limites-sem-amostra"
+argv = ["estimate", "@HOME@/plano.md", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.limites-calibrado"
+argv = ["estimate", "@HOME@/plano.md", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist-limites.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_LIMITS_MIN_INTERVALS = "2" }
+compare = ["stdout", "exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.limites-calibrado.texto"
+argv = ["estimate", "@HOME@/plano.md"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist-limites.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_LIMITS_MIN_INTERVALS = "2" }
+compare = ["stdout", "exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.erro.sem-plano"
+argv = ["estimate"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "estimate.erro.inexistente"
+argv = ["estimate", "@HOME@/nada.md"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "estimate.erro.mode-invalido"
+argv = ["estimate", "@HOME@/plano.md", "--mode", "x"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "estimate.erro.mode-sem-valor"
+argv = ["estimate", "@HOME@/plano.md", "--mode"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "estimate.erro.flag-extra"
+argv = ["estimate", "@HOME@/plano.md", "--x"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "estimate.erro.dois-planos"
+argv = ["estimate", "@HOME@/plano.md", "@HOME@/plano-secao.md"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "estimate.erro.sem-tabela"
+argv = ["estimate", "@HOME@/plano-sem-tabela.md"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "estimate.erro.hades-now-invalido"
+argv = ["estimate", "@HOME@/plano.md"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "ontem" }
+compare = ["exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"

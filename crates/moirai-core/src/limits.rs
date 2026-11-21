@@ -8,7 +8,6 @@ use std::fs;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
-use hades_core::clock::now_ms;
 use hades_core::config::config_value;
 use hades_core::env::Env;
 use hades_core::fsx::read_text;
@@ -810,7 +809,7 @@ fn mtime_day(path: &Path) -> Option<String> {
 /// amostra não lê transcript. Não grava `usage/cache.json`: relê os transcripts do dia da amostra mais antiga.
 pub fn limits_now(env: &Env, cwd: &Path) -> Result<LimitsNow, HadesError> {
     let k = chaves(env, cwd);
-    let agora = now_ms(env) as f64;
+    let agora = crate::history::clock_ms(env)? as f64;
     let Medidas { amostras, atual } = medidas(env, agora, &k);
     let Some(oldest) = amostras.first() else {
         return Ok(LimitsNow {

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use hades_core::Env;
-use hades_core::clock::now_ms;
+use hades_core::clock;
 use hades_core::config::config_value;
 use hades_core::fsx::{is_dir, list_dir, read_text};
 use hades_core::jsfmt::to_fixed;
@@ -365,6 +365,12 @@ fn gate_journals(base: &Path, roots: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// `clockNow`: `HADES_NOW` inválido é erro que sai com 1 (o `throw` do TS não passa por `die`).
+pub fn clock_ms(env: &Env) -> Result<i64, HadesError> {
+    clock::now_ms(env)
+        .map_err(|e| HadesError::with_code(e.to_string(), hades_core::output::exit::FAIL))
+}
+
 /// `intKey` da janela (`HADES_MOIRAI_WINDOW_DAYS`, `src/commands/moirai.ts:190`).
 pub fn window_days(env: &Env, cwd: &Path) -> Result<f64, HadesError> {
     let key = "HADES_MOIRAI_WINDOW_DAYS";
@@ -424,7 +430,7 @@ pub fn collect_history(
             units.push(history_unit(&record, root, &measured, params));
         }
     }
-    Ok(in_window(dedupe(units), now_ms(env), window))
+    Ok(in_window(dedupe(units), clock_ms(env)?, window))
 }
 
 fn number(value: f64) -> Value {

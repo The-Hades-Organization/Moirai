@@ -2711,6 +2711,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hades-core"
+version = "0.1.0"
+source = "git+https://github.com/The-Hades-Organization/Hades-Core?tag=v0.2.0#ae71e585c574e6a01086f829639c81894122cef2"
+dependencies = [
+ "regex",
+ "rustix",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3801,6 +3812,11 @@ dependencies = [
 [[package]]
 name = "moirai-core"
 version = "0.1.0"
+dependencies = [
+ "hades-core",
+ "regex",
+ "tempfile",
+]
 
 [[package]]
 name = "moxcms"

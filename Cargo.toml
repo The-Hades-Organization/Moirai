@@ -9,6 +9,8 @@ license = "MIT"
 repository = "https://github.com/The-Hades-Organization/Moirai"
 
 [workspace.dependencies]
+hades-core = { git = "https://github.com/The-Hades-Organization/Hades-Core", tag = "v0.2.0" }
+regex = "1"
 clap = { version = "4", features = ["derive"] }
 gpui = { package = "gpui-pre", version = "=0.3.11" }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11", default-features = false, features = ["wayland", "x11"] }

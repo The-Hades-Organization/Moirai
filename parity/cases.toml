@@ -303,7 +303,6 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "ontem" }
 compare = ["exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.deep"

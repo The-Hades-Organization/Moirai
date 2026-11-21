@@ -3,6 +3,7 @@
 pub mod budget;
 pub mod estimate;
 pub mod jsnum;
+pub mod limits;
 pub mod model;
 pub mod params;
 pub mod plan;

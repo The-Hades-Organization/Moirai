@@ -1,6 +1,7 @@
 //! Regra de negócio do Moirai, sem interface.
 
 pub mod budget;
+pub mod deep;
 pub mod estimate;
 pub mod history;
 pub mod jsnum;

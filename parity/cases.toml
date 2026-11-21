@@ -303,3 +303,12 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "ontem" }
 compare = ["exit"]
+pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
+
+[[case]]
+id = "estimate.deep"
+argv = ["estimate", "@HOME@/plano.md", "--deep", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+setup = "setup-deep.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z", MOIRAI_HADES_BIN = "bin/hades" }
+compare = ["stdout", "exit"]

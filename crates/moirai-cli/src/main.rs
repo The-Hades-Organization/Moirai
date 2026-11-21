@@ -1,5 +1,7 @@
 //! `moirai`: argumentos e impressão; a regra mora no `moirai-core` (`src/commands/moirai.ts`).
 
+mod deep;
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -8,6 +10,7 @@ use hades_core::fsx::{is_file, read_text, realpath_missing_ok};
 use hades_core::jsonfmt::json_indent;
 use hades_core::output::{HadesError, exit, out, warn};
 use hades_core::paths::hades_home;
+use moirai_core::deep::deep_hints;
 use moirai_core::estimate::estimate_plan;
 use moirai_core::history::{clock_ms, collect_history, history_json, history_lines, window_days};
 use moirai_core::limits::{limites_do_plano, limits_now};
@@ -53,11 +56,11 @@ fn iso_millis(ms: i64) -> String {
     format!("{}.{:03}Z", &secs[..secs.len() - 1], ms.rem_euclid(1000))
 }
 
-/// `estimate` sem `--deep` (`src/commands/moirai.ts:301`).
+/// `estimate` (`src/commands/moirai.ts:301`).
 fn estimate(args: &[String], env: &Env, cwd: &std::path::Path) -> Result<i32, HadesError> {
     let mut plan = String::new();
     let mut mode: Option<Mode> = None;
-    let (mut write, mut json) = (false, false);
+    let (mut write, mut json, mut deep) = (false, false, false);
     let mut i = 0;
     while i < args.len() {
         let arg = args[i].as_str();
@@ -77,9 +80,7 @@ fn estimate(args: &[String], env: &Env, cwd: &std::path::Path) -> Result<i32, Ha
         } else if arg == "--json" {
             json = true;
         } else if arg == "--deep" {
-            return Err(HadesError::new(
-                "--deep ainda não está disponível no moirai em Rust; use o Hades (hades moirai estimate --deep)",
-            ));
+            deep = true;
         } else if arg.starts_with('-') || !plan.is_empty() {
             return Err(HadesError::new(format!(
                 "argumento desconhecido: {arg}\n{USAGE}"
@@ -113,7 +114,13 @@ fn estimate(args: &[String], env: &Env, cwd: &std::path::Path) -> Result<i32, Ha
     });
     let params = load_params(env, cwd)?;
     let history = collect_history(env, cwd, &params)?;
-    let estimates = estimate_plan(&units, plan_mode, &history, &params, &HashMap::new());
+    let hints = if deep {
+        let runner = deep::HadesRunner::new(env)?;
+        deep_hints(&units, &mut |prompt| runner.estimate(prompt))?
+    } else {
+        HashMap::new()
+    };
+    let estimates = estimate_plan(&units, plan_mode, &history, &params, &hints);
     let now = clock_ms(env)?;
     if write {
         let iso = iso_millis(now);

@@ -3749,6 +3749,8 @@ version = "0.1.0"
 dependencies = [
  "hades-core",
  "moirai-core",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

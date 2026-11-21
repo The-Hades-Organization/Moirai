@@ -534,3 +534,64 @@ fn dado_calculo_em_outra_thread_entao_o_resultado_chega_pelo_controle_da_tarefa(
     assert!(t.concluir(geracao));
     assert!(linhas.is_empty());
 }
+
+fn dicas(n: u64) -> std::collections::HashMap<String, f64> {
+    [("u1".to_owned(), n as f64)].into()
+}
+
+#[test]
+fn dado_profunda_com_sucesso_em_outra_thread_entao_as_dicas_sao_aplicadas() {
+    let mut p = Profunda::default();
+    let g = p.iniciar().unwrap();
+    assert!(p.estimando());
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || tx.send((g, Ok(dicas(120)))).unwrap());
+    let (g, r) = rx.recv().unwrap();
+    assert_eq!(p.concluir(g, r), Profundo::Aplicado);
+    assert!(!p.estimando());
+    assert_eq!(p.dicas().get("u1"), Some(&120.0));
+}
+
+#[test]
+fn dado_profunda_em_andamento_entao_o_segundo_clique_e_bloqueado() {
+    let mut p = Profunda::default();
+    let g = p.iniciar().unwrap();
+    assert_eq!(p.iniciar(), None);
+    assert_eq!(p.concluir(g, Ok(dicas(1))), Profundo::Aplicado);
+    assert!(p.iniciar().is_some());
+}
+
+#[test]
+fn dado_profunda_com_erro_entao_devolve_a_mensagem_e_libera_o_botao() {
+    let mut p = Profunda::default();
+    let g = p.iniciar().unwrap();
+    let r = p.concluir(
+        g,
+        Err("moirai --deep: o comando `hades` não está no PATH".into()),
+    );
+    assert_eq!(
+        r,
+        Profundo::Falhou("moirai --deep: o comando `hades` não está no PATH".into())
+    );
+    assert!(!p.estimando());
+    assert!(p.dicas().is_empty());
+}
+
+#[test]
+fn dado_plano_que_mudou_entao_o_resultado_velho_e_descartado() {
+    let mut p = Profunda::default();
+    let velha = p.iniciar().unwrap();
+    p.esquecer();
+    assert!(!p.estimando());
+    assert_eq!(p.concluir(velha, Ok(dicas(9))), Profundo::Descartado);
+    assert!(p.dicas().is_empty());
+}
+
+#[test]
+fn dado_plano_que_mudou_entao_as_dicas_antigas_sao_esquecidas() {
+    let mut p = Profunda::default();
+    let g = p.iniciar().unwrap();
+    p.concluir(g, Ok(dicas(5)));
+    p.esquecer();
+    assert!(p.dicas().is_empty());
+}

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use hades_core::Env;
 use hades_core::output::{HadesError, warn};
-use hades_core::proc::{RunOptions, run, which};
+use hades_core::proc::{RunOptions, RunResult, run, which};
 use serde_json::Value;
 
 /// Binário do Hades; ausente, procura `hades` no PATH.
@@ -53,13 +53,35 @@ pub fn parse_print_argv(stdout: &str) -> Result<PrintArgv, String> {
     })
 }
 
-pub struct HadesRunner {
+/// Executor de subprocesso; o teste troca por um falso.
+pub trait Exec: Send + Sync {
+    fn run(&self, program: &str, args: &[&str], options: &RunOptions) -> RunResult;
+}
+
+/// Executor real: `hades_core::proc::run`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SystemExec;
+
+impl Exec for SystemExec {
+    fn run(&self, program: &str, args: &[&str], options: &RunOptions) -> RunResult {
+        run(program, args, options)
+    }
+}
+
+pub struct HadesRunner<X: Exec = SystemExec> {
     hades: String,
+    exec: X,
 }
 
 impl HadesRunner {
     /// Falha com código 2 se não houver `hades`.
     pub fn new(env: &Env) -> Result<Self, HadesError> {
+        Self::with_exec(env, SystemExec)
+    }
+}
+
+impl<X: Exec> HadesRunner<X> {
+    pub fn with_exec(env: &Env, exec: X) -> Result<Self, HadesError> {
         let hades = match env.get(HADES_BIN_ENV).filter(|v| !v.is_empty()) {
             Some(path) => path.to_owned(),
             None => which("hades", env.get("PATH").unwrap_or(""))
@@ -71,7 +93,7 @@ impl HadesRunner {
                 .to_string_lossy()
                 .into_owned(),
         };
-        Ok(Self { hades })
+        Ok(Self { hades, exec })
     }
 
     fn argv(&self, prompt: &str) -> Result<PrintArgv, HadesError> {
@@ -80,7 +102,7 @@ impl HadesRunner {
                 "moirai --deep: `hades provider print-argv` falhou: {why}"
             ))
         };
-        let r = run(
+        let r = self.exec.run(
             &self.hades,
             &[
                 "provider",
@@ -117,7 +139,7 @@ impl HadesRunner {
     pub fn estimate(&self, prompt: &str) -> Result<Option<String>, HadesError> {
         let spec = self.argv(prompt)?;
         let args: Vec<&str> = spec.args.iter().map(String::as_str).collect();
-        let r = run(
+        let r = self.exec.run(
             &spec.bin,
             &args,
             &RunOptions {
@@ -159,6 +181,61 @@ mod tests {
             parse_print_argv("{\"bin\":\"c\",\"args\":[1],\"cwd\":\"/\",\"timeout_s\":3}").is_err()
         );
         assert!(parse_print_argv("{\"bin\":\"c\",\"args\":[],\"cwd\":\"/\"}").is_err());
+    }
+
+    struct Falso(std::sync::Mutex<Vec<(String, Vec<String>)>>, Vec<RunResult>);
+
+    impl Exec for Falso {
+        fn run(&self, program: &str, args: &[&str], _: &RunOptions) -> RunResult {
+            let mut chamadas = self.0.lock().unwrap();
+            let r = self.1[chamadas.len()].clone();
+            chamadas.push((
+                program.to_owned(),
+                args.iter().map(|a| (*a).to_owned()).collect(),
+            ));
+            r
+        }
+    }
+
+    fn ok(stdout: &str) -> RunResult {
+        RunResult {
+            status: 0,
+            stdout: stdout.into(),
+            stderr: String::new(),
+            timed_out: false,
+        }
+    }
+
+    #[test]
+    fn executor_falso_recebe_o_print_argv_e_depois_o_estimador() {
+        let env = Env::empty().with(HADES_BIN_ENV, "/h");
+        let falso = Falso(
+            Default::default(),
+            vec![
+                ok(r#"{"bin":"est","args":["-p"],"cwd":"/s","timeout_s":5}"#),
+                ok(r#"{"lines": 7}"#),
+            ],
+        );
+        let r = HadesRunner::with_exec(&env, falso).unwrap();
+        assert_eq!(r.estimate("p").unwrap().as_deref(), Some(r#"{"lines": 7}"#));
+        let c = r.exec.0.lock().unwrap();
+        assert_eq!(c[0].0, "/h");
+        assert_eq!(c[0].1[..2], ["provider", "print-argv"]);
+        assert_eq!(c[1].0, "est");
+    }
+
+    #[test]
+    fn print_argv_com_erro_vira_mensagem() {
+        let env = Env::empty().with(HADES_BIN_ENV, "/h");
+        let falha = RunResult {
+            status: 3,
+            stdout: String::new(),
+            stderr: "boom".into(),
+            timed_out: false,
+        };
+        let r = HadesRunner::with_exec(&env, Falso(Default::default(), vec![falha])).unwrap();
+        let e = r.estimate("p").unwrap_err();
+        assert!(e.message.contains("saiu 3: boom"));
     }
 
     #[test]

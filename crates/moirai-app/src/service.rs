@@ -9,6 +9,8 @@ use hades_core::fsx::{is_file, read_text, realpath_missing_ok};
 use hades_core::output::HadesError;
 use hades_core::paths::{hades_home, work_root};
 use moirai_core::budget::{MoiraiDeps, MoiraiRoutes, Registry};
+use moirai_core::deep::deep_hints;
+use moirai_core::deep_runner::HadesRunner;
 use moirai_core::estimate::estimate_plan;
 use moirai_core::history::{clock_ms, collect_history, window_days};
 use moirai_core::limits::{LimitesDoPlano, limites_do_plano, limits_now};
@@ -61,6 +63,7 @@ pub fn estimar(
     modo: Mode,
     params: &Params,
     historico: &[HistoryUnit],
+    dicas: &HashMap<String, f64>,
 ) -> Result<Estimativa, HadesError> {
     if !is_file(plano) {
         return Err(HadesError::new(format!(
@@ -77,7 +80,7 @@ pub fn estimar(
             caminho.display()
         )));
     }
-    let estimativas = estimate_plan(&unidades, modo, historico, params, &HashMap::new());
+    let estimativas = estimate_plan(&unidades, modo, historico, params, dicas);
     let medidas = limits_now(env, cwd)?;
     let limites = limites_do_plano(&costs_of(&estimativas), &medidas.calibracao, &medidas.atual);
     Ok(Estimativa {
@@ -86,6 +89,28 @@ pub fn estimar(
         limites,
         base: historico.len(),
     })
+}
+
+/// Estimativa profunda do plano: pergunta o tamanho de cada unidade ao estimador, como o `--deep` do CLI.
+pub fn dicas_profundas(
+    plano: &Path,
+    estimador: &mut dyn FnMut(&str) -> Result<Option<String>, HadesError>,
+) -> Result<HashMap<String, f64>, HadesError> {
+    let texto = read_text(&realpath_missing_ok(plano)).unwrap_or_default();
+    let unidades = plan_units(&texto);
+    if unidades.is_empty() {
+        return Err(HadesError::new(format!(
+            "{}: sem tabela em \"## Unidades\" (colunas Unidade, Papel e Escopo ou Specs); nada a estimar",
+            plano.display()
+        )));
+    }
+    deep_hints(&unidades, estimador)
+}
+
+/// `--deep` com o `hades` do ambiente.
+pub fn profunda(env: &Env, plano: &Path) -> Result<HashMap<String, f64>, HadesError> {
+    let runner = HadesRunner::new(env)?;
+    dicas_profundas(plano, &mut |prompt| runner.estimate(prompt))
 }
 
 fn data_iso(ms: i64) -> String {

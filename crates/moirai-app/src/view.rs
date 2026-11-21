@@ -58,6 +58,7 @@ pub struct MoiraiView {
     t_estimar: vm::Tarefa,
     t_teto: vm::Tarefa,
     t_janelas: vm::Tarefa,
+    profunda: vm::Profunda,
 }
 
 const PERIODO_MS: u64 = 500;
@@ -95,6 +96,7 @@ impl MoiraiView {
             t_estimar: vm::Tarefa::default(),
             t_teto: vm::Tarefa::default(),
             t_janelas: vm::Tarefa::default(),
+            profunda: vm::Profunda::default(),
             env,
             cwd,
         };
@@ -144,18 +146,19 @@ impl MoiraiView {
         let Some(g) = self.t_estimar.iniciar() else {
             return;
         };
-        let (env, cwd, modo, historico) = (
+        let (env, cwd, modo, historico, dicas) = (
             self.env.clone(),
             self.cwd.clone(),
             self.modo,
             self.historico.clone(),
+            self.profunda.dicas().clone(),
         );
         cx.spawn(async move |this, cx| {
             let r = cx
                 .background_executor()
-                .spawn(
-                    async move { service::estimar(&env, &cwd, &plano, modo, &params, &historico) },
-                )
+                .spawn(async move {
+                    service::estimar(&env, &cwd, &plano, modo, &params, &historico, &dicas)
+                })
                 .await;
             let _ = this.update(cx, |v, cx| {
                 if !v.t_estimar.concluir(g) {
@@ -179,7 +182,36 @@ impl MoiraiView {
         .detach();
     }
 
+    /// Estimativa profunda no executor de fundo; ao voltar, reestima o plano com as dicas.
+    fn rodar_profunda(&mut self, cx: &mut Context<Self>) {
+        let Some(plano) = self.plano.clone() else {
+            return;
+        };
+        let Some(g) = self.profunda.iniciar() else {
+            return;
+        };
+        self.aviso = None;
+        let env = self.env.clone();
+        cx.spawn(async move |this, cx| {
+            let r = cx
+                .background_executor()
+                .spawn(async move { service::profunda(&env, &plano).map_err(|e| e.to_string()) })
+                .await;
+            let _ = this.update(cx, |v, cx| {
+                match v.profunda.concluir(g, r) {
+                    vm::Profundo::Descartado => return,
+                    vm::Profundo::Aplicado => v.reestimar(cx),
+                    vm::Profundo::Falhou(msg) => v.aviso = Some(msg),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     fn abrir_plano(&mut self, caminho: PathBuf, cx: &mut Context<Self>) {
+        self.profunda.esquecer();
         self.modo = service::modo_padrao(&self.env, &caminho);
         self.observar(&caminho);
         self.plano = Some(caminho);
@@ -224,6 +256,7 @@ impl MoiraiView {
             return false;
         }
         self.assinatura = agora;
+        self.profunda.esquecer();
         self.reestimar(cx);
         true
     }
@@ -353,7 +386,8 @@ impl MoiraiView {
         let ocupado = self.t_historico.carregando()
             || self.t_estimar.carregando()
             || self.t_teto.carregando()
-            || self.t_janelas.carregando();
+            || self.t_janelas.carregando()
+            || self.profunda.estimando();
         let esquerda = self.aviso.clone().unwrap_or_else(|| {
             if ocupado {
                 "calculando…".to_owned()
@@ -393,8 +427,16 @@ impl MoiraiView {
             .as_ref()
             .map_or_else(String::new, |p| p.display().to_string());
         let pode_gravar = self.estimativa.is_some();
-        let deep = Button::new("profunda", "Profunda")
-            .disabled("--deep ainda não está disponível no Moirai em Rust");
+        let deep = if self.plano.is_none() {
+            Button::new("profunda", "Profunda")
+                .disabled("Abra um plano para estimar em profundidade")
+        } else if self.profunda.estimando() {
+            Button::new("profunda", "Estimando…").disabled("A estimativa profunda está rodando")
+        } else {
+            let e = entidade.clone();
+            Button::new("profunda", "Profunda")
+                .on_click(move |_, _, cx| e.update(cx, |v, cx| v.rodar_profunda(cx)))
+        };
         let gravar = {
             let b = Button::new("gravar", "Gravar no plano").primary();
             if pode_gravar {

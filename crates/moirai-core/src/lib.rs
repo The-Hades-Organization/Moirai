@@ -2,6 +2,7 @@
 
 pub mod budget;
 pub mod deep;
+pub mod deep_runner;
 pub mod estimate;
 pub mod history;
 pub mod jsnum;

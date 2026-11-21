@@ -1,7 +1,5 @@
 //! `moirai`: argumentos e impressão; a regra mora no `moirai-core` (`src/commands/moirai.ts`).
 
-mod deep;
-
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -115,7 +113,7 @@ fn estimate(args: &[String], env: &Env, cwd: &std::path::Path) -> Result<i32, Ha
     let params = load_params(env, cwd)?;
     let history = collect_history(env, cwd, &params)?;
     let hints = if deep {
-        let runner = deep::HadesRunner::new(env)?;
+        let runner = moirai_core::deep_runner::HadesRunner::new(env)?;
         deep_hints(&units, &mut |prompt| runner.estimate(prompt))?
     } else {
         HashMap::new()

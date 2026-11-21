@@ -678,5 +678,59 @@ impl Tarefa {
     }
 }
 
+/// Desfecho de uma estimativa profunda ao voltar do executor de fundo.
+#[derive(Debug, PartialEq)]
+pub enum Profundo {
+    /// O plano mudou no meio: o resultado é descartado e nada se altera.
+    Descartado,
+    Aplicado,
+    Falhou(String),
+}
+
+/// Estado do botão "Profunda": as dicas valem para o plano aberto e só enquanto ele for o mesmo.
+#[derive(Debug, Default)]
+pub struct Profunda {
+    tarefa: Tarefa,
+    dicas: std::collections::HashMap<String, f64>,
+}
+
+impl Profunda {
+    /// Geração da nova execução, ou `None` se já está estimando (bloqueia o segundo clique).
+    pub fn iniciar(&mut self) -> Option<u64> {
+        self.tarefa.iniciar()
+    }
+
+    /// Outro plano (ou arquivo reescrito): descarta o que está em voo e esquece as dicas.
+    pub fn esquecer(&mut self) {
+        self.tarefa.invalidar();
+        self.dicas.clear();
+    }
+
+    pub fn concluir(
+        &mut self,
+        geracao: u64,
+        resultado: Result<std::collections::HashMap<String, f64>, String>,
+    ) -> Profundo {
+        if !self.tarefa.concluir(geracao) {
+            return Profundo::Descartado;
+        }
+        match resultado {
+            Ok(dicas) => {
+                self.dicas = dicas;
+                Profundo::Aplicado
+            }
+            Err(msg) => Profundo::Falhou(msg),
+        }
+    }
+
+    pub fn estimando(&self) -> bool {
+        self.tarefa.carregando()
+    }
+
+    pub fn dicas(&self) -> &std::collections::HashMap<String, f64> {
+        &self.dicas
+    }
+}
+
 #[cfg(test)]
 mod tests;

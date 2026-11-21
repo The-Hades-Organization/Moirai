@@ -9,9 +9,13 @@ license = "MIT"
 repository = "https://github.com/The-Hades-Organization/Moirai"
 
 [workspace.dependencies]
-hades-core = { git = "https://github.com/The-Hades-Organization/Hades-Core", tag = "v0.2.0" }
-regex = "1"
 clap = { version = "4", features = ["derive"] }
+hades-core = { git = "https://github.com/The-Hades-Organization/Hades-Core", tag = "v0.2.0" }
+serde_json = { version = "1", features = ["preserve_order"] }
+fancy-regex = "0.14"
+regex = "1"
+indexmap = "2"
+tempfile = "3"
 gpui = { package = "gpui-pre", version = "=0.3.11" }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11", default-features = false, features = ["wayland", "x11"] }
 gpui-component = "=0.9.0"

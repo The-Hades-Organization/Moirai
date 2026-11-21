@@ -1,0 +1,10 @@
+{
+ "name": "u-skill",
+ "state": "done",
+ "role": "impl",
+ "branch": "feat/inexistente",
+ "worktree": "@HOME@/wt/u-skill",
+ "createdAt": "2026-11-03T00:00:00Z",
+ "doneAt": "2026-11-03T00:20:00Z",
+ "mode": "skill"
+}

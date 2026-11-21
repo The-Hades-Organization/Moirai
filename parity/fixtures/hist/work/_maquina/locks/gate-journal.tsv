@@ -1,0 +1,2 @@
+2026-11-01T00:30:00Z	done	test	u-um	4	@HOME@/wt/u-um	rc=0	dur=90s	peak=2048MB	cmd=x
+2026-11-01T00:40:00Z	done	lint	u-dois	2	@HOME@/wt/u-dois	rc=0	dur=45s	peak=900MB	cmd=y

@@ -1,0 +1,1 @@
+{"type": "assistant", "sessionId": "S4", "requestId": "v1", "cwd": "@HOME@/wt/x", "message": {"id": "v1", "model": "claude-sonnet-5-5", "usage": {"input_tokens": 400, "output_tokens": 600, "cache_read_input_tokens": 30000, "cache_creation_input_tokens": 5000}}, "timestamp": "2026-01-01T00:30:00Z"}

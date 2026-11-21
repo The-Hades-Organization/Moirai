@@ -1,7 +1,7 @@
 //! Expressões de polling do hook `hades guard`, lidas de `loop/hooks/guard-rules.json` (`src/lib/guard-rules.ts`).
 //!
-//! O arquivo usa lookahead e backreference (`heredoc`), por isso `fancy-regex`. Diferença aceita: as classes `\w`, `\d`
-//! e `\b` seguem Unicode, não só ASCII como no JS; só aparecem em comando de shell.
+//! O arquivo usa lookahead e backreference (`heredoc`), por isso `fancy-regex`. `\w`, `\d` e `\b` são reescritos para
+//! ASCII (`ascii_classes`), como no JS.
 
 use fancy_regex::{Captures, Regex};
 use hades_core::{Env, fsx::read_text, paths::skill_root};
@@ -24,6 +24,57 @@ pub struct GuardRules {
     pub heredoc: Regex,
 }
 
+const WORD_BOUNDARY: &str =
+    "(?:(?<=[0-9A-Za-z_])(?![0-9A-Za-z_])|(?<![0-9A-Za-z_])(?=[0-9A-Za-z_]))";
+const NOT_WORD_BOUNDARY: &str =
+    "(?:(?<=[0-9A-Za-z_])(?=[0-9A-Za-z_])|(?<![0-9A-Za-z_])(?![0-9A-Za-z_]))";
+
+/// `\w`, `\d`, `\W`, `\D`, `\b` e `\B` com o sentido ASCII do JS (o regex do Rust os faz Unicode).
+fn ascii_classes(re: &str) -> String {
+    let mut out = String::with_capacity(re.len());
+    let mut in_class = false;
+    let mut chars = re.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => match chars.next() {
+                Some('w') if in_class => out.push_str("0-9A-Za-z_"),
+                Some('d') if in_class => out.push_str("0-9"),
+                Some('w') => out.push_str("[0-9A-Za-z_]"),
+                Some('W') if !in_class => out.push_str("[^0-9A-Za-z_]"),
+                Some('d') => out.push_str("[0-9]"),
+                Some('D') if !in_class => out.push_str("[^0-9]"),
+                Some('b') if !in_class => out.push_str(WORD_BOUNDARY),
+                Some('B') if !in_class => out.push_str(NOT_WORD_BOUNDARY),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            },
+            '[' if !in_class => {
+                in_class = true;
+                out.push(c);
+                if let Some(next) = chars.clone().next() {
+                    if next == '^' {
+                        out.push('^');
+                        chars.next();
+                    }
+                    if chars.clone().next() == Some(']') {
+                        out.push_str("\\]");
+                        chars.next();
+                    }
+                }
+            }
+            ']' if in_class => {
+                in_class = false;
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 fn compile(spec: &Value) -> Result<(Regex, String), String> {
     let re = spec
         .get("re")
@@ -31,7 +82,8 @@ fn compile(spec: &Value) -> Result<(Regex, String), String> {
         .ok_or("guard-rules: regra sem `re`")?;
     let flags = spec.get("flags").and_then(Value::as_str).unwrap_or("");
     let prefix = if flags.contains('s') { "(?s)" } else { "" };
-    let rx = Regex::new(&format!("{prefix}{re}")).map_err(|e| format!("guard-rules: {e}"))?;
+    let rx = Regex::new(&format!("{prefix}{}", ascii_classes(re)))
+        .map_err(|e| format!("guard-rules: {e}"))?;
     let what = spec
         .get("what")
         .and_then(Value::as_str)
@@ -134,6 +186,22 @@ mod tests {
 
     fn rules() -> GuardRules {
         GuardRules::embedded()
+    }
+
+    #[test]
+    fn classes_seguem_o_ascii_do_js() {
+        assert_eq!(
+            ascii_classes("\\bsleep\\s+\\d+"),
+            format!("{WORD_BOUNDARY}sleep\\s+[0-9]+")
+        );
+        assert_eq!(ascii_classes("[\\w.-]\\W"), "[0-9A-Za-z_.-][^0-9A-Za-z_]");
+        let r = rules();
+        assert!(!r.is_polling("xsleep 60"));
+        assert!(r.is_polling("sleep 60"));
+        assert!(r.is_polling("tail -f x"));
+        assert!(!r.is_polling("tail -é x"));
+        assert!(!r.is_polling("sleep ٦٠"));
+        assert!(r.is_polling("sleep 60é"));
     }
 
     #[test]

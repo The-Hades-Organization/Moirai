@@ -1,0 +1,130 @@
+# Matriz de paridade do Moirai: `hades moirai ...` (TS, Hades-Skill) contra o binário `moirai`.
+# O argv é o do binário; o lado TS ganha o subcomando `moirai` por `ts_cmd`.
+# Casos que dependem do relógio ficam `pending` até o Hades-Skill do CI ler `HADES_NOW` (PR #151).
+
+[[case]]
+id = "uso.sem-sub"
+argv = []
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "uso.help"
+argv = ["-h"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "uso.help-longo"
+argv = ["--help"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "uso.desconhecido"
+argv = ["x"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "history.vazio.json"
+argv = ["history", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "history.vazio.texto"
+argv = ["history"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "history.json"
+argv = ["history", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+pending = "o Hades-Skill fixado no CI (143cf96) ainda não lê HADES_NOW (PR #151): o TS usa o relógio real na janela de 90 dias"
+
+[[case]]
+id = "history.texto"
+argv = ["history"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+pending = "o Hades-Skill fixado no CI (143cf96) ainda não lê HADES_NOW (PR #151): o TS usa o relógio real na janela de 90 dias"
+
+[[case]]
+id = "history.janela-zero.json"
+argv = ["history", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_WINDOW_DAYS = "0" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "history.janela-zero.texto"
+argv = ["history"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_WINDOW_DAYS = "0" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "history.faixas-por-config"
+argv = ["history", "--json"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+setup = "setup-hist.sh"
+env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_WINDOW_DAYS = "0", HADES_MOIRAI_SMALL_LINES = "100", HADES_MOIRAI_LARGE_LINES = "300" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "history.config-invalida"
+argv = ["history"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_SMALL_LINES = "-1" }
+compare = ["exit"]
+
+[[case]]
+id = "history.config-nao-inteira"
+argv = ["history"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_MIN_SAMPLE = "1.5" }
+compare = ["exit"]
+
+[[case]]
+id = "history.janela-invalida"
+argv = ["history"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+fixture = "hist"
+env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_WINDOW_DAYS = "abc" }
+compare = ["exit"]
+
+[[case]]
+id = "history.arg-invalido"
+argv = ["history", "--x"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]
+
+[[case]]
+id = "history.arg-invalido-com-json"
+argv = ["history", "--json", "extra"]
+ts_cmd = ["{skill}/src/cli.ts", "moirai"]
+env = { HADES_NOW = "2026-11-20T12:00:00Z" }
+compare = ["stdout", "exit"]

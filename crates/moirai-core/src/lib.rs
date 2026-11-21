@@ -2,6 +2,7 @@
 
 pub mod budget;
 pub mod estimate;
+pub mod history;
 pub mod jsnum;
 pub mod limits;
 pub mod model;

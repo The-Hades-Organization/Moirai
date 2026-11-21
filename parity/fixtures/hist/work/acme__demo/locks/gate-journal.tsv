@@ -1,0 +1,2 @@
+2026-11-01T00:30:00Z	done	test	u-um	4	@HOME@/wt/u-um	rc=0	dur=90s	peak=2048MB	cmd=x
+2026-11-01T00:50:00Z	done	build	u-um	2	@HOME@/wt/u-um	rc=0	dur=30s	peak=3072MB	cmd=z

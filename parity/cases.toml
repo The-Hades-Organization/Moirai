@@ -1,6 +1,6 @@
 # Matriz de paridade do Moirai: `hades moirai ...` (TS, Hades-Skill) contra o binário `moirai`.
 # O argv é o do binário; o lado TS ganha o subcomando `moirai` por `ts_cmd`.
-# Casos que dependem do relógio ficam `pending` até o Hades-Skill do CI ler `HADES_NOW` (PR #151).
+# Casos que dependem do relógio fixam HADES_NOW; o Hades-Skill do CI lê a variável.
 
 [[case]]
 id = "uso.sem-sub"
@@ -52,7 +52,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
-pending = "o Hades-Skill fixado no CI (143cf96) ainda não lê HADES_NOW (PR #151): o TS usa o relógio real na janela de 90 dias"
 
 [[case]]
 id = "history.texto"
@@ -62,7 +61,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
-pending = "o Hades-Skill fixado no CI (143cf96) ainda não lê HADES_NOW (PR #151): o TS usa o relógio real na janela de 90 dias"
 
 [[case]]
 id = "history.janela-zero.json"
@@ -137,7 +135,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.texto"
@@ -147,7 +144,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.modo-skill"
@@ -157,7 +153,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.modo-projeto"
@@ -167,7 +162,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.modo-padrao-skill"
@@ -177,7 +171,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.specs-card"
@@ -187,7 +180,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.sem-historico"
@@ -205,7 +197,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit", "files:plano.md"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.write-substitui"
@@ -215,7 +206,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit", "files:plano-secao.md"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.write-sem-historico"
@@ -224,7 +214,6 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["exit", "files:plano-secao.md"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.limites-sem-amostra"
@@ -234,7 +223,6 @@ fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
 compare = ["stdout", "exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.limites-calibrado"
@@ -244,7 +232,6 @@ fixture = "hist"
 setup = "setup-hist-limites.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_LIMITS_MIN_INTERVALS = "2" }
 compare = ["stdout", "exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.limites-calibrado.texto"
@@ -254,7 +241,6 @@ fixture = "hist"
 setup = "setup-hist-limites.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_LIMITS_MIN_INTERVALS = "2" }
 compare = ["stdout", "exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"
 
 [[case]]
 id = "estimate.erro.sem-plano"
@@ -317,4 +303,3 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "ontem" }
 compare = ["exit"]
-pending = "depende do relógio: o Hades-Skill fixado no CI ainda não lê HADES_NOW (PR #151)"

@@ -146,6 +146,7 @@ impl<X: Exec> HadesRunner<X> {
                 cwd: Some(spec.cwd),
                 timeout: Some(Duration::from_secs(spec.timeout_s)),
                 max_buffer: Some(MAX_BUFFER),
+                ..RunOptions::default()
             },
         );
         if r.timed_out {

@@ -25,6 +25,8 @@ use moirai_core::limits::{JANELAS, LimitesDoPlano};
 use moirai_core::model::{HistoryUnit, Mode, Params};
 use notify::{RecursiveMode, Watcher};
 
+pub mod embed;
+
 use crate::config::{self, ConfigLocal, FonteDeConfig, Linha, Origem};
 use crate::service::{self, Estimativa};
 use crate::vm::{
@@ -75,6 +77,7 @@ pub struct MoiraiView {
     t_teto: vm::Tarefa,
     t_janelas: vm::Tarefa,
     profunda: vm::Profunda,
+    integrado: bool,
 }
 
 const PERIODO_MS: u64 = 500;
@@ -117,6 +120,7 @@ impl MoiraiView {
             t_teto: vm::Tarefa::default(),
             t_janelas: vm::Tarefa::default(),
             profunda: vm::Profunda::default(),
+            integrado: false,
             env,
             cwd,
         };
@@ -994,19 +998,10 @@ impl Render for MoiraiView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = palette(cx);
         window.set_window_title(&self.titulo());
-        if self.tela == Tela::Config {
-            self.garantir_config(window, cx);
-        }
         let (esquerda, fonte, versao) = self.rodape();
         let rail = self.rail(cx);
-        let corpo = match self.tela {
-            Tela::Estimar => self.tela_estimar(cx),
-            Tela::Historico => self.tela_historico(cx),
-            Tela::Teto => self.tela_teto(cx),
-            Tela::Janelas => self.tela_janelas(),
-            Tela::Config => self.tela_config(cx),
-        };
-        let mut raiz = div()
+        let corpo = self.corpo(self.tela, window, cx);
+        div()
             .id("moirai")
             .track_focus(&self.foco)
             .on_key_down(cx.listener(|v, ev: &KeyDownEvent, _, cx| {
@@ -1024,14 +1019,37 @@ impl Render for MoiraiView {
             .bg(p.bg)
             .text_color(p.fg)
             .child(div().flex_1().flex().min_h_0().child(rail).child(corpo))
-            .child(StatusBar::new(esquerda, fonte).version(versao));
-        if self.confirmando {
-            let alvo = self
-                .plano
-                .as_ref()
-                .map_or_else(String::new, |p| p.display().to_string());
-            let (sim, nao) = (cx.entity(), cx.entity());
-            raiz = raiz.child(
+            .child(StatusBar::new(esquerda, fonte).version(versao))
+            .children(self.confirmacao(cx))
+    }
+}
+
+impl MoiraiView {
+    /// Miolo da tela `tela`, sem trilho nem barra de status.
+    fn corpo(&mut self, tela: Tela, window: &mut Window, cx: &mut Context<Self>) -> Page {
+        if tela == Tela::Config {
+            self.garantir_config(window, cx);
+        }
+        match tela {
+            Tela::Estimar => self.tela_estimar(cx),
+            Tela::Historico => self.tela_historico(cx),
+            Tela::Teto => self.tela_teto(cx),
+            Tela::Janelas => self.tela_janelas(),
+            Tela::Config => self.tela_config(cx),
+        }
+    }
+
+    /// Diálogo de "Gravar no plano", quando pedido.
+    fn confirmacao(&self, cx: &mut Context<Self>) -> Option<Confirm> {
+        if !self.confirmando {
+            return None;
+        }
+        let alvo = self
+            .plano
+            .as_ref()
+            .map_or_else(String::new, |p| p.display().to_string());
+        let (sim, nao) = (cx.entity(), cx.entity());
+        Some(
                 Confirm::new("Gravar a estimativa no plano?")
                     .detail("A seção \"## Estimativa\" entra no hash da aprovação: o plano precisa ser aprovado de novo.")
                     .target(alvo)
@@ -1049,9 +1067,7 @@ impl Render for MoiraiView {
                             cx.notify();
                         });
                     }),
-            );
-        }
-        raiz
+        )
     }
 }
 

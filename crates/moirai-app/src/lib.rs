@@ -5,6 +5,7 @@ mod service;
 mod view;
 pub mod vm;
 
+pub use view::embed::telas;
 pub use view::{MoiraiView, abrir_janela, abrir_janela_em};
 
 pub const NOME: &str = "Moirai";

@@ -10,7 +10,7 @@ Moirai: estimativa e uso por janela dos agentes do Hades.
 
 ## Estado
 
-F0, em construção. Só o esqueleto do workspace existe; nada da ferramenta foi portado ainda.
+CLI e app portados (estimar, histórico, teto, janelas, configurações); o app também abre embutido no painel do Hades (`FerramentaEmbutida` do Hades-UI v0.3.0).
 
 ## Relação com o Hades-Skill
 

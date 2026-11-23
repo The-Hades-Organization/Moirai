@@ -27,7 +27,7 @@ impl Tela {
     /// Telas com atalho numérico; Configurações fica de fora porque tem campos de texto.
     pub const COM_ATALHO: [Tela; 4] = [Tela::Estimar, Tela::Historico, Tela::Teto, Tela::Janelas];
 
-    pub fn rotulo(self) -> &'static str {
+    pub const fn rotulo(self) -> &'static str {
         match self {
             Tela::Estimar => "Estimar plano",
             Tela::Historico => "Histórico",
@@ -38,7 +38,7 @@ impl Tela {
     }
 
     /// Ícone do painel web para a página equivalente: Consumo (Coins), Gauge de "Contexto e espera".
-    pub fn icone(self) -> hades_ui::IconName {
+    pub const fn icone(self) -> hades_ui::IconName {
         use hades_ui::IconName;
         match self {
             Tela::Estimar => IconName::Coins,
@@ -49,7 +49,18 @@ impl Tela {
         }
     }
 
-    /// Nome curto da flag `--tela`.
+    /// Nome curto da flag `--tela`; também o id estável da tela no painel.
+    pub const fn id(self) -> &'static str {
+        match self {
+            Tela::Estimar => "estimar",
+            Tela::Historico => "historico",
+            Tela::Teto => "teto",
+            Tela::Janelas => "janelas",
+            Tela::Config => "configuracoes",
+        }
+    }
+
+    /// Tela da flag `--tela`.
     pub fn de_nome(nome: &str) -> Option<Tela> {
         match nome {
             "estimar" => Some(Tela::Estimar),

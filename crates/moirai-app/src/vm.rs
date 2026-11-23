@@ -13,10 +13,19 @@ pub enum Tela {
     Historico,
     Teto,
     Janelas,
+    Config,
 }
 
 impl Tela {
-    pub const TODAS: [Tela; 4] = [Tela::Estimar, Tela::Historico, Tela::Teto, Tela::Janelas];
+    pub const TODAS: [Tela; 5] = [
+        Tela::Estimar,
+        Tela::Historico,
+        Tela::Teto,
+        Tela::Janelas,
+        Tela::Config,
+    ];
+    /// Telas com atalho numérico; Configurações fica de fora porque tem campos de texto.
+    pub const COM_ATALHO: [Tela; 4] = [Tela::Estimar, Tela::Historico, Tela::Teto, Tela::Janelas];
 
     pub fn rotulo(self) -> &'static str {
         match self {
@@ -24,6 +33,7 @@ impl Tela {
             Tela::Historico => "Histórico",
             Tela::Teto => "Teto ao vivo",
             Tela::Janelas => "Janelas",
+            Tela::Config => "Configurações",
         }
     }
 
@@ -35,6 +45,7 @@ impl Tela {
             Tela::Historico => IconName::History,
             Tela::Teto => IconName::Gauge,
             Tela::Janelas => IconName::Clock,
+            Tela::Config => IconName::SlidersHorizontal,
         }
     }
 
@@ -45,6 +56,7 @@ impl Tela {
             "historico" => Some(Tela::Historico),
             "teto" => Some(Tela::Teto),
             "janelas" => Some(Tela::Janelas),
+            "configuracoes" => Some(Tela::Config),
             _ => None,
         }
     }
@@ -659,7 +671,43 @@ pub fn coluna_numerica(nome: &str) -> bool {
 /// Atalho: teclas 1 a 4 trocam de tela, como o clique no `Rail`.
 pub fn tela_da_tecla(tecla: &str) -> Option<Tela> {
     let n: usize = tecla.parse().ok()?;
-    Tela::TODAS.get(n.checked_sub(1)?).copied()
+    Tela::COM_ATALHO.get(n.checked_sub(1)?).copied()
+}
+
+/// `1 configuração`, `5 configurações`.
+pub fn configuracoes(n: usize) -> String {
+    format!(
+        "{n} {}",
+        if n == 1 {
+            "configuração"
+        } else {
+            "configurações"
+        }
+    )
+}
+
+/// `1 mais recente`, `8 mais recentes`.
+pub fn mais_recentes(n: usize) -> String {
+    format!(
+        "{n} {}",
+        if n == 1 {
+            "mais recente"
+        } else {
+            "mais recentes"
+        }
+    )
+}
+
+/// `1 unidade encerrada`, `3 unidades encerradas`.
+pub fn unidades_encerradas(n: usize) -> String {
+    format!(
+        "{n} {}",
+        if n == 1 {
+            "unidade encerrada"
+        } else {
+            "unidades encerradas"
+        }
+    )
 }
 
 /// Controle de uma tarefa de fundo: no máximo uma em voo (a renovação periódica pula se a anterior não acabou) e

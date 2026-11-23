@@ -337,6 +337,25 @@ fn teclas_trocam_de_tela() {
 }
 
 #[test]
+fn configuracoes_e_a_ultima_tela_sem_atalho() {
+    assert_eq!(Tela::TODAS.last(), Some(&Tela::Config));
+    assert_eq!(Tela::de_nome("configuracoes"), Some(Tela::Config));
+    assert_eq!(Tela::de_rotulo("Configurações"), Some(Tela::Config));
+    assert_eq!(tela_da_tecla("5"), None);
+}
+
+#[test]
+fn plural_concorda_com_a_contagem() {
+    assert_eq!(mais_recentes(1), "1 mais recente");
+    assert_eq!(mais_recentes(0), "0 mais recentes");
+    assert_eq!(mais_recentes(8), "8 mais recentes");
+    assert_eq!(configuracoes(1), "1 configuração");
+    assert_eq!(configuracoes(7), "7 configurações");
+    assert_eq!(unidades_encerradas(1), "1 unidade encerrada");
+    assert_eq!(unidades_encerradas(2), "2 unidades encerradas");
+}
+
+#[test]
 fn colunas_numericas() {
     assert!(coluna_numerica("US$ p50"));
     assert!(coluna_numerica("Duração"));

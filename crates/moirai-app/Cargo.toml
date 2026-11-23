@@ -23,5 +23,8 @@ gpui.workspace = true
 gpui_platform.workspace = true
 gpui-component.workspace = true
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints]
 workspace = true

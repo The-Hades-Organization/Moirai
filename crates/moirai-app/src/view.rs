@@ -1,6 +1,7 @@
 //! `MoiraiView`: casca (topo, rail, status) e as telas Estimar plano e Histórico.
 
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
@@ -9,11 +10,13 @@ use gpui::{
     App, AppContext, Context, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
     ParentElement, Render, SharedString, Styled, Window, div, px,
 };
+use gpui_component::input::{InputEvent, InputState};
 use hades_core::Env;
 use hades_ui::components::{
     Align, Button, Card, Confirm, DataTable, EmptyState, FilterBar, Kpi, KpiStrip, MetaList, Meter,
     Page, PageHeader, PathField, Rail, RailBrand, RailGroup, RailItem, RailStat, Segmented,
-    Skeleton, SortDirection, Spinner, StatusBadge, StatusBar, TermBlock,
+    SettingOrigin, SettingRow, SettingsBar, SettingsGroup, Skeleton, SortDirection, Spinner,
+    StatusBadge, StatusBar, TermBlock,
 };
 use hades_ui::tokens::space;
 use hades_ui::{IconName, palette};
@@ -22,14 +25,25 @@ use moirai_core::limits::{JANELAS, LimitesDoPlano};
 use moirai_core::model::{HistoryUnit, Mode, Params};
 use notify::{RecursiveMode, Watcher};
 
+use crate::config::{self, ConfigLocal, FonteDeConfig, Linha, Origem};
 use crate::service::{self, Estimativa};
 use crate::vm::{
     self, Assinatura, COLUNAS_ESTIMAR, COLUNAS_HISTORICO, COLUNAS_TETO, Chip, Direcao, Filtros,
     Ordem, Tela,
 };
 
+/// Linhas da página Configurações e um campo de texto por linha.
+struct CfgEstado {
+    linhas: Vec<Linha>,
+    entradas: Vec<Entity<InputState>>,
+    erro: Option<String>,
+}
+
 pub struct MoiraiView {
     env: Env,
+    fonte: Rc<dyn FonteDeConfig>,
+    cfg: Option<CfgEstado>,
+    cfg_salvo: bool,
     cwd: PathBuf,
     tela: Tela,
     params: Option<Params>,
@@ -70,6 +84,9 @@ const TIQUES_JANELAS: u32 = 60;
 impl MoiraiView {
     pub fn new(env: Env, cwd: PathBuf, foco: FocusHandle, cx: &mut Context<Self>) -> Self {
         let mut view = Self {
+            fonte: Rc::new(ConfigLocal::new(&env, &cwd)),
+            cfg: None,
+            cfg_salvo: false,
             tela: Tela::Estimar,
             params: None,
             historico: Vec::new(),
@@ -399,7 +416,7 @@ impl MoiraiView {
             .unwrap_or_else(|| if ocupado { "calculando…" } else { "pronto" }.to_owned());
         (
             esquerda,
-            format!("fonte: {} unidades encerradas", self.historico.len()),
+            format!("fonte: {}", vm::unidades_encerradas(self.historico.len())),
             format!("moirai {}", env!("CARGO_PKG_VERSION")),
         )
     }
@@ -435,7 +452,8 @@ impl MoiraiView {
                 item(Tela::Janelas, "limites do plano"),
             ],
         );
-        Rail::new([plano, medicao])
+        let ajustes = RailGroup::new("Ajustes", [item(Tela::Config, "chaves HADES_MOIRAI_*")]);
+        Rail::new([plano, medicao, ajustes])
             .brand(RailBrand::new("Moirai").subtitle("planos e estimativas"))
             .stat(self.rodape_do_rail())
             .theme_toggle()
@@ -724,7 +742,7 @@ impl MoiraiView {
         });
         let mut medidores = Card::new()
             .title("Uso do p75")
-            .meta(format!("{} mais recentes", self.teto.len().min(8)));
+            .meta(vm::mais_recentes(self.teto.len().min(8)));
         for l in self.teto.iter().take(8) {
             let fracao = l.pct.map_or(0.0, |p| (p / 100.0).clamp(0.0, 1.0) as f32);
             medidores = medidores.child(
@@ -740,6 +758,141 @@ impl MoiraiView {
                 .meta(format!("{} no total", self.teto.len()))
                 .fill()
                 .child(tabela),
+        )
+    }
+
+    /// Cria os campos da página na primeira vez que ela aparece (e depois de salvar ou descartar).
+    fn garantir_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.cfg.is_some() {
+            return;
+        }
+        let (linhas, erro) = match self.fonte.carregar() {
+            Ok(l) => (l, None),
+            Err(e) => (Vec::new(), Some(e)),
+        };
+        let mut entradas = Vec::new();
+        for l in &linhas {
+            let valor = l.valor.clone();
+            let entrada = cx.new(|cx| InputState::new(window, cx).default_value(valor));
+            cx.subscribe(&entrada, |v: &mut Self, _, e: &InputEvent, cx| {
+                if matches!(e, InputEvent::Change) {
+                    v.cfg_salvo = false;
+                    cx.notify();
+                }
+            })
+            .detach();
+            entradas.push(entrada);
+        }
+        self.cfg = Some(CfgEstado {
+            linhas,
+            entradas,
+            erro,
+        });
+    }
+
+    fn textos_config(&self, cx: &App) -> Vec<String> {
+        self.cfg.as_ref().map_or_else(Vec::new, |c| {
+            c.entradas
+                .iter()
+                .map(|e| e.read(cx).value().to_string())
+                .collect()
+        })
+    }
+
+    fn salvar_config(&mut self, cx: &mut Context<Self>) {
+        let textos = self.textos_config(cx);
+        let Some(c) = &self.cfg else { return };
+        match config::salvar(self.fonte.as_ref(), &c.linhas, &textos) {
+            Ok(n) => {
+                self.aviso = Some(format!("Configurações gravadas ({n})"));
+                self.cfg = None;
+                self.cfg_salvo = true;
+                self.recarregar_historico(cx);
+            }
+            Err(e) => self.aviso = Some(e),
+        }
+        cx.notify();
+    }
+
+    fn descartar_config(&mut self, cx: &mut Context<Self>) {
+        self.cfg = None;
+        self.cfg_salvo = false;
+        cx.notify();
+    }
+
+    fn tela_config(&self, cx: &mut Context<Self>) -> Page {
+        let cabecalho = PageHeader::new("Configurações")
+            .subtitle("Chaves HADES_MOIRAI_* do catálogo do Hades")
+            .description("Mesmos nomes, padrões, faixas e precedência do CLI: ambiente, depois o config.env, depois o padrão.");
+        let pagina = Page::new("pagina-config").header(cabecalho);
+        let Some(c) = &self.cfg else {
+            return pagina;
+        };
+        if let Some(erro) = &c.erro {
+            return pagina.child(
+                EmptyState::new("Catálogo indisponível")
+                    .hint(erro.clone())
+                    .fill(),
+            );
+        }
+        let textos = self.textos_config(cx);
+        let erros = config::erros(&c.linhas, &textos);
+        let pendentes = config::pendentes(&c.linhas, &textos);
+        let entidade = cx.entity();
+        let mut grupos: Vec<(String, Vec<usize>)> = Vec::new();
+        for (i, l) in c.linhas.iter().enumerate() {
+            match grupos.iter_mut().find(|(g, _)| *g == l.grupo) {
+                Some((_, idx)) => idx.push(i),
+                None => grupos.push((l.grupo.clone(), vec![i])),
+            }
+        }
+        let mut pagina = pagina;
+        if !self.fonte.gravavel() {
+            pagina = pagina.child(Card::new().note(
+                "Sem instalação do Hades: a página mostra os padrões do kit e não grava nada.",
+            ));
+        }
+        for (nome, indices) in grupos {
+            let fora = indices
+                .iter()
+                .filter(|&&i| textos[i].trim() != c.linhas[i].padrao)
+                .count();
+            let mut grupo = SettingsGroup::new(nome).meta(format!(
+                "{} · {fora} fora do padrão",
+                vm::configuracoes(indices.len())
+            ));
+            for i in indices {
+                let l = &c.linhas[i];
+                let id = SharedString::from(format!("cfg-{}", l.chave));
+                let entrada = &c.entradas[i];
+                let mut linha = match l.faixa() {
+                    Some((min, max)) => SettingRow::number(id, l.rotulo.clone(), entrada, min, max),
+                    None => SettingRow::text(id, l.rotulo.clone(), entrada),
+                }
+                .key(l.chave.clone())
+                .description(l.descricao.clone())
+                .default_value(l.padrao.clone())
+                .origin(match l.origem {
+                    Origem::Padrao => SettingOrigin::Default,
+                    Origem::Arquivo => SettingOrigin::File,
+                    Origem::Ambiente => SettingOrigin::Env,
+                })
+                .modified(textos[i].trim() != l.padrao)
+                .error_opt(erros[i].clone());
+                let (entrada, padrao) = (entrada.clone(), l.padrao.clone());
+                linha = linha.on_reset(move |_, window, cx| {
+                    entrada.update(cx, |s, cx| s.set_value(padrao.clone(), window, cx));
+                });
+                grupo = grupo.row(linha);
+            }
+            pagina = pagina.child(grupo);
+        }
+        let (e_salvar, e_descartar) = (entidade.clone(), entidade);
+        pagina.child(
+            SettingsBar::new(pendentes)
+                .saved(self.cfg_salvo)
+                .on_save(move |_, _, cx| e_salvar.update(cx, |v, cx| v.salvar_config(cx)))
+                .on_discard(move |_, _, cx| e_descartar.update(cx, |v, cx| v.descartar_config(cx))),
         )
     }
 
@@ -841,6 +994,9 @@ impl Render for MoiraiView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = palette(cx);
         window.set_window_title(&self.titulo());
+        if self.tela == Tela::Config {
+            self.garantir_config(window, cx);
+        }
         let (esquerda, fonte, versao) = self.rodape();
         let rail = self.rail(cx);
         let corpo = match self.tela {
@@ -848,11 +1004,15 @@ impl Render for MoiraiView {
             Tela::Historico => self.tela_historico(cx),
             Tela::Teto => self.tela_teto(cx),
             Tela::Janelas => self.tela_janelas(),
+            Tela::Config => self.tela_config(cx),
         };
         let mut raiz = div()
             .id("moirai")
             .track_focus(&self.foco)
             .on_key_down(cx.listener(|v, ev: &KeyDownEvent, _, cx| {
+                if v.tela == Tela::Config {
+                    return;
+                }
                 if let Some(t) = vm::tela_da_tecla(&ev.keystroke.key) {
                     v.mudar_tela(t, cx);
                     cx.notify();

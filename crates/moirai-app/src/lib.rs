@@ -1,5 +1,6 @@
 //! View gpui do Moirai, exportada para o app próprio e para o painel do Hades.
 
+pub mod config;
 mod service;
 mod view;
 pub mod vm;

@@ -7,42 +7,42 @@ id = "uso.sem-sub"
 argv = []
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "uso.help"
 argv = ["-h"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "uso.help-longo"
 argv = ["--help"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "uso.desconhecido"
 argv = ["x"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "history.vazio.json"
 argv = ["history", "--json"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "history.vazio.texto"
 argv = ["history"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "history.json"
@@ -51,7 +51,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "history.texto"
@@ -60,7 +60,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "history.janela-zero.json"
@@ -69,7 +69,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_WINDOW_DAYS = "0" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "history.janela-zero.texto"
@@ -78,7 +78,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_WINDOW_DAYS = "0" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "history.faixas-por-config"
@@ -87,7 +87,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_WINDOW_DAYS = "0", HADES_MOIRAI_SMALL_LINES = "100", HADES_MOIRAI_LARGE_LINES = "300" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "history.config-invalida"
@@ -95,7 +95,7 @@ argv = ["history"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_SMALL_LINES = "-1" }
-compare = ["exit"]
+compare = ["stderr", "exit"]
 
 [[case]]
 id = "history.config-nao-inteira"
@@ -103,7 +103,7 @@ argv = ["history"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_MIN_SAMPLE = "1.5" }
-compare = ["exit"]
+compare = ["stderr", "exit"]
 
 [[case]]
 id = "history.janela-invalida"
@@ -111,21 +111,21 @@ argv = ["history"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_MOIRAI_WINDOW_DAYS = "abc" }
-compare = ["exit"]
+compare = ["stderr", "exit"]
 
 [[case]]
 id = "history.arg-invalido"
 argv = ["history", "--x"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "history.arg-invalido-com-json"
 argv = ["history", "--json", "extra"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.json"
@@ -134,7 +134,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.texto"
@@ -143,7 +143,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.modo-skill"
@@ -152,7 +152,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.modo-projeto"
@@ -161,7 +161,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.modo-padrao-skill"
@@ -170,7 +170,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.specs-card"
@@ -179,7 +179,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.sem-historico"
@@ -187,7 +187,7 @@ argv = ["estimate", "@HOME@/plano.md", "--json"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 setup = "setup-plano.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.write"
@@ -196,7 +196,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit", "files:plano.md"]
+compare = ["stdout", "stderr", "exit", "files:plano.md"]
 
 [[case]]
 id = "estimate.write-substitui"
@@ -205,7 +205,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit", "files:plano-secao.md"]
+compare = ["stdout", "stderr", "exit", "files:plano-secao.md"]
 
 [[case]]
 id = "estimate.write-sem-historico"
@@ -213,7 +213,7 @@ argv = ["estimate", "@HOME@/plano-secao.md", "--write"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["exit", "files:plano-secao.md"]
+compare = ["stderr", "exit", "files:plano-secao.md"]
 
 [[case]]
 id = "estimate.limites-sem-amostra"
@@ -222,7 +222,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.limites-calibrado"
@@ -231,7 +231,7 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist-limites.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_LIMITS_MIN_INTERVALS = "2" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.limites-calibrado.texto"
@@ -240,21 +240,21 @@ ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 setup = "setup-hist-limites.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", HADES_LIMITS_MIN_INTERVALS = "2" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.erro.sem-plano"
 argv = ["estimate"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.erro.inexistente"
 argv = ["estimate", "@HOME@/nada.md"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.erro.mode-invalido"
@@ -262,7 +262,7 @@ argv = ["estimate", "@HOME@/plano.md", "--mode", "x"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.erro.mode-sem-valor"
@@ -270,7 +270,7 @@ argv = ["estimate", "@HOME@/plano.md", "--mode"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.erro.flag-extra"
@@ -278,7 +278,7 @@ argv = ["estimate", "@HOME@/plano.md", "--x"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.erro.dois-planos"
@@ -286,7 +286,7 @@ argv = ["estimate", "@HOME@/plano.md", "@HOME@/plano-secao.md"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.erro.sem-tabela"
@@ -294,7 +294,7 @@ argv = ["estimate", "@HOME@/plano-sem-tabela.md"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "2026-11-20T12:00:00Z" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]
 
 [[case]]
 id = "estimate.erro.hades-now-invalido"
@@ -302,7 +302,7 @@ argv = ["estimate", "@HOME@/plano.md"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 fixture = "hist"
 env = { HADES_NOW = "ontem" }
-compare = ["exit"]
+compare = ["stderr", "exit"]
 
 [[case]]
 id = "estimate.deep"
@@ -310,4 +310,4 @@ argv = ["estimate", "@HOME@/plano.md", "--deep", "--json"]
 ts_cmd = ["{skill}/src/cli.ts", "moirai"]
 setup = "setup-deep.sh"
 env = { HADES_NOW = "2026-11-20T12:00:00Z", MOIRAI_HADES_BIN = "bin/hades" }
-compare = ["stdout", "exit"]
+compare = ["stdout", "stderr", "exit"]

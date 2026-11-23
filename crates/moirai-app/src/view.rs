@@ -12,10 +12,11 @@ use gpui::{
 use hades_core::Env;
 use hades_ui::components::{
     Align, Button, Card, Confirm, DataTable, EmptyState, FilterBar, Kpi, KpiStrip, Meter,
-    PageHeader, PathField, Rail, RailGroup, RailItem, Segmented, SortDirection, StatusBadge,
-    StatusBar, TermBlock, TopBar,
+    PageHeader, PathField, Rail, RailGroup, RailItem, Segmented, Skeleton, SortDirection, Spinner,
+    StatusBadge, StatusBar, TermBlock, TopBar,
 };
 use hades_ui::palette;
+use hades_ui::tokens::space;
 use moirai_core::budget::MoiraiRoutes;
 use moirai_core::limits::{JANELAS, LimitesDoPlano};
 use moirai_core::model::{HistoryUnit, Mode, Params};
@@ -400,15 +401,17 @@ impl MoiraiView {
 
     fn rail(&self, cx: &mut Context<Self>) -> Rail {
         let entidade = cx.entity();
-        let itens = vm::Tela::TODAS.map(|t| {
+        let item = |t: Tela| {
             let item = RailItem::new(t.rotulo());
             if t == Tela::Historico {
                 item.badge(self.historico.len().to_string())
             } else {
                 item
             }
-        });
-        Rail::new([RailGroup::new("Moirai", itens)])
+        };
+        let plano = RailGroup::new("Plano", [item(Tela::Estimar), item(Tela::Historico)]);
+        let medicao = RailGroup::new("Medição", [item(Tela::Teto), item(Tela::Janelas)]);
+        Rail::new([plano, medicao])
             .selected(self.tela.rotulo())
             .on_select(move |rotulo, _, cx| {
                 if let Some(t) = Tela::de_rotulo(rotulo) {
@@ -431,7 +434,9 @@ impl MoiraiView {
             Button::new("profunda", "Profunda")
                 .disabled("Abra um plano para estimar em profundidade")
         } else if self.profunda.estimando() {
-            Button::new("profunda", "Estimando…").disabled("A estimativa profunda está rodando")
+            Button::new("profunda", "Estimando…")
+                .loading(true)
+                .disabled("A estimativa profunda está rodando")
         } else {
             let e = entidade.clone();
             Button::new("profunda", "Profunda")
@@ -483,7 +488,7 @@ impl MoiraiView {
         let mut coluna = div()
             .flex()
             .flex_col()
-            .gap(px(14.0))
+            .gap(px(space::LG))
             .child(cabecalho)
             .child(campo);
         let Some(est) = &self.estimativa else {
@@ -530,7 +535,7 @@ impl MoiraiView {
             });
         coluna = coluna.child(tabela);
 
-        let mut janelas = div().flex().gap(px(12.0));
+        let mut janelas = div().flex().gap(px(space::MD));
         for j in JANELAS {
             let m = vm::medidor(j, est.limites.get(j));
             janelas = janelas.child(
@@ -538,7 +543,7 @@ impl MoiraiView {
                     .flex_1()
                     .flex()
                     .flex_col()
-                    .gap(px(4.0))
+                    .gap(px(space::XS))
                     .child(format!("Janela de {}", j.rotulo()))
                     .child(Meter::new(m.fracao).tone(m.tom))
                     .child(m.texto),
@@ -572,7 +577,7 @@ impl MoiraiView {
         let coluna = div()
             .flex()
             .flex_col()
-            .gap(px(14.0))
+            .gap(px(space::LG))
             .child(cabecalho)
             .child(barra);
         let visiveis = vm::visiveis(&self.historico, &self.filtros, self.ordem_historico);
@@ -631,13 +636,13 @@ impl MoiraiView {
                 hades_ui::Tone::Neutral,
             ));
         }
-        let coluna = div().flex().flex_col().gap(px(14.0)).child(cabecalho);
+        let coluna = div().flex().flex_col().gap(px(space::LG)).child(cabecalho);
         if self.teto.is_empty() && self.t_teto.carregando() {
             return coluna
-                .child(
-                    EmptyState::new("Carregando…")
-                        .hint("Lendo os transcripts das unidades em execução."),
-                )
+                .child(estado_carregando(
+                    "teto",
+                    "Lendo os transcripts das unidades em execução.",
+                ))
                 .into_any_element();
         }
         if self.teto.is_empty() {
@@ -660,15 +665,15 @@ impl MoiraiView {
                 cx.notify();
             });
         });
-        let mut medidores = div().flex().flex_col().gap(px(8.0));
+        let mut medidores = div().flex().flex_col().gap(px(space::SM));
         for l in self.teto.iter().take(8) {
             let fracao = l.pct.map_or(0.0, |p| (p / 100.0).clamp(0.0, 1.0) as f32);
             medidores = medidores.child(
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(10.0))
-                    .child(div().w(px(220.0)).child(l.unidade.clone()))
+                    .gap(px(space::SM))
+                    .child(div().w_1_4().child(l.unidade.clone()))
                     .child(
                         div()
                             .flex_1()
@@ -685,11 +690,12 @@ impl MoiraiView {
 
     fn tela_janelas(&self) -> gpui::AnyElement {
         let cabecalho = PageHeader::new("Janelas");
-        let coluna = div().flex().flex_col().gap(px(14.0)).child(cabecalho);
+        let coluna = div().flex().flex_col().gap(px(space::LG)).child(cabecalho);
         let Some(limites) = &self.janelas else {
             if self.t_janelas.carregando() {
                 return coluna
-                    .child(EmptyState::new("Carregando…").hint(
+                    .child(estado_carregando(
+                        "janelas",
                         "Relendo os transcripts para calibrar as janelas; a primeira leitura pode levar um minuto.",
                     ))
                     .into_any_element();
@@ -700,7 +706,7 @@ impl MoiraiView {
                 ))
                 .into_any_element();
         };
-        let mut cartoes = div().flex().gap(px(12.0));
+        let mut cartoes = div().flex().gap(px(space::MD));
         let mut atuais = Vec::new();
         for j in JANELAS {
             let limite = limites.get(j);
@@ -723,6 +729,25 @@ impl MoiraiView {
             .child(TermBlock::new().line(linha))
             .into_any_element()
     }
+}
+
+fn estado_carregando(id: &'static str, dica: &'static str) -> gpui::AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(space::MD))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(space::SM))
+                .child(Spinner::new(SharedString::from(format!("{id}-giro"))))
+                .child(StatusBadge::new("Calculando", hades_ui::Tone::Busy))
+                .child(dica),
+        )
+        .child(Skeleton::new(SharedString::from(format!("{id}-sk1"))))
+        .child(Skeleton::new(SharedString::from(format!("{id}-sk2"))))
+        .into_any_element()
 }
 
 fn direcao_ui(d: Direcao) -> SortDirection {
@@ -776,9 +801,9 @@ impl Render for MoiraiView {
                 div()
                     .flex_1()
                     .flex()
-                    .min_h(px(0.0))
+                    .min_h_0()
                     .child(rail)
-                    .child(div().flex_1().p(px(16.0)).child(corpo)),
+                    .child(div().flex_1().p(px(space::LG)).child(corpo)),
             )
             .child(StatusBar::new(esquerda, direita));
         if self.confirmando {

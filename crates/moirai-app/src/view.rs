@@ -11,9 +11,9 @@ use gpui::{
 };
 use hades_core::Env;
 use hades_ui::components::{
-    Align, Button, Card, Confirm, DataTable, EmptyState, FilterBar, Kpi, KpiStrip, Meter,
-    PageHeader, PathField, Rail, RailBrand, RailGroup, RailItem, Segmented, Skeleton,
-    SortDirection, Spinner, StatusBadge, StatusBar, TermBlock, TopBar,
+    Align, Button, Card, Confirm, DataTable, EmptyState, FilterBar, Kpi, KpiStrip, MetaList, Meter,
+    Page, PageHeader, PathField, Rail, RailBrand, RailGroup, RailItem, RailStat, Segmented,
+    Skeleton, SortDirection, Spinner, StatusBadge, StatusBar, TermBlock,
 };
 use hades_ui::tokens::space;
 use hades_ui::{IconName, palette};
@@ -401,18 +401,31 @@ impl MoiraiView {
 
     fn rail(&self, cx: &mut Context<Self>) -> Rail {
         let entidade = cx.entity();
-        let item = |t: Tela| {
-            let item = RailItem::new(t.rotulo()).icon(t.icone());
+        let item = |t: Tela, sub: &'static str| {
+            let item = RailItem::new(t.rotulo()).icon(t.icone()).subtitle(sub);
             if t == Tela::Historico {
                 item.badge(self.historico.len().to_string())
             } else {
                 item
             }
         };
-        let plano = RailGroup::new("Plano", [item(Tela::Estimar), item(Tela::Historico)]);
-        let medicao = RailGroup::new("Medição", [item(Tela::Teto), item(Tela::Janelas)]);
+        let plano = RailGroup::new(
+            "Plano",
+            [
+                item(Tela::Estimar, "custo e duração"),
+                item(Tela::Historico, "unidades encerradas"),
+            ],
+        );
+        let medicao = RailGroup::new(
+            "Medição",
+            [
+                item(Tela::Teto, "custo real contra o p75"),
+                item(Tela::Janelas, "limites do plano"),
+            ],
+        );
         Rail::new([plano, medicao])
-            .brand(RailBrand::hades().subtitle("Moirai"))
+            .brand(RailBrand::new("Moirai").subtitle("planos e estimativas"))
+            .footer(self.rodape_do_rail())
             .selected(self.tela.rotulo())
             .on_select(move |rotulo, _, cx| {
                 if let Some(t) = Tela::de_rotulo(rotulo) {
@@ -424,7 +437,23 @@ impl MoiraiView {
             })
     }
 
-    fn tela_estimar(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+    /// Janela mais curta medida: é o teto que o dono mais olha ao aprovar um plano.
+    fn rodape_do_rail(&self) -> RailStat {
+        let limites = self
+            .janelas
+            .as_ref()
+            .or_else(|| self.estimativa.as_ref().map(|e| &e.limites));
+        let Some(limites) = limites else {
+            return RailStat::new("Janela de 5 h", "sem medida");
+        };
+        let j = JANELAS[0];
+        let m = vm::medidor(j, limites.get(j));
+        RailStat::new(format!("Janela de {}", j.rotulo()), m.texto)
+            .fraction(m.fracao)
+            .tone(m.tom)
+    }
+
+    fn tela_estimar(&self, cx: &mut Context<Self>) -> Page {
         let entidade = cx.entity();
         let caminho = self
             .plano
@@ -472,7 +501,7 @@ impl MoiraiView {
         let campo = {
             let e = entidade.clone();
             PathField::new("plano")
-                .value(caminho.clone())
+                .value(caminho)
                 .placeholder("Escolha um plan.md")
                 .prompt("Abrir plano")
                 .on_pick(move |p, cx| {
@@ -482,30 +511,23 @@ impl MoiraiView {
                     });
                 })
         };
-        let cabecalho = PageHeader::new(if caminho.is_empty() {
-            "Estimar plano".to_owned()
-        } else {
-            caminho
-        })
-        .action(seletor)
-        .action(deep)
-        .action(gravar);
+        let cabecalho = PageHeader::new("Estimar plano")
+            .subtitle("Custo e duração por unidade do plano")
+            .description(
+                "A estimativa vem do histórico de unidades encerradas; gravar no plano troca a seção \"## Estimativa\".",
+            )
+            .action(seletor)
+            .action(deep)
+            .action(gravar);
 
-        let mut coluna = div()
-            .flex()
-            .flex_col()
-            .gap(px(space::LG))
-            .child(cabecalho)
-            .child(campo);
+        let pagina = Page::new("pagina-estimar").header(cabecalho).child(campo);
         let Some(est) = &self.estimativa else {
-            return coluna
-                .child(EmptyState::new("Nenhum plano aberto").hint(
-                    "Escolha um plan.md com a tabela \"## Unidades\" para ver custo e duração por unidade.",
-                ))
-                .into_any_element();
+            return pagina.child(EmptyState::new("Nenhum plano aberto").fill().hint(
+                "Escolha um plan.md com a tabela \"## Unidades\" para ver custo e duração por unidade.",
+            ));
         };
         let k = vm::kpis(&est.estimativas, est.base);
-        coluna = coluna.child(KpiStrip::new([
+        let pagina = pagina.child(KpiStrip::new([
             Kpi::new("Custo p50", k.custo_p50.map_or("—".into(), vm::usd)),
             Kpi::new("Custo p75", k.custo_p75.map_or("—".into(), vm::usd)),
             Kpi::new("Duração p50", vm::duracao_celula(k.duracao_p50_min)),
@@ -514,7 +536,7 @@ impl MoiraiView {
 
         let mut linhas = vm::linhas_estimar(&est.estimativas);
         vm::ordenar_estimar(&mut linhas, self.ordem_estimar);
-        let mut tabela = DataTable::new(colunas(&COLUNAS_ESTIMAR));
+        let mut tabela = DataTable::new(colunas(&COLUNAS_ESTIMAR)).fill("tabela-estimar");
         for l in &linhas {
             tabela = tabela.row(vm::celulas_estimar(l).into_iter().map(SharedString::from));
         }
@@ -539,23 +561,28 @@ impl MoiraiView {
                     cx.notify();
                 });
             });
-        coluna = coluna.child(tabela);
 
-        let mut janelas = div().flex().gap(px(space::MD));
+        let mut janelas = Card::new()
+            .title("Janelas do plano")
+            .meta("uso atual e quanto o plano acrescenta");
         for j in JANELAS {
             let m = vm::medidor(j, est.limites.get(j));
             janelas = janelas.child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .gap(px(space::XS))
-                    .child(format!("Janela de {}", j.rotulo()))
-                    .child(Meter::new(m.fracao).tone(m.tom))
-                    .child(m.texto),
+                Meter::new(m.fracao)
+                    .tone(m.tom)
+                    .label(format!("Janela de {}", j.rotulo()))
+                    .value(m.texto),
             );
         }
-        coluna.child(janelas).into_any_element()
+        pagina
+            .child(
+                Card::new()
+                    .title("Unidades")
+                    .meta(format!("{} no plano", linhas.len()))
+                    .fill()
+                    .child(tabela),
+            )
+            .child(janelas)
     }
 
     fn pedir_confirmacao(&mut self, cx: &mut Context<Self>) {
@@ -563,9 +590,11 @@ impl MoiraiView {
         cx.notify();
     }
 
-    fn tela_historico(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+    fn tela_historico(&self, cx: &mut Context<Self>) -> Page {
         let entidade = cx.entity();
-        let cabecalho = PageHeader::new("Histórico");
+        let cabecalho = PageHeader::new("Histórico")
+            .subtitle("Unidades encerradas com custo medido")
+            .description("Os chips filtram por papel, modo e faixa; a estimativa usa só o que passa nos filtros.");
         let chips = vm::chips_do_historico(&self.historico);
         let mut barra = FilterBar::new().label("Filtrar");
         for c in &chips {
@@ -580,12 +609,7 @@ impl MoiraiView {
                 cx.notify();
             });
         });
-        let coluna = div()
-            .flex()
-            .flex_col()
-            .gap(px(space::LG))
-            .child(cabecalho)
-            .child(barra);
+        let pagina = Page::new("pagina-historico").header(cabecalho).child(barra);
         let visiveis = vm::visiveis(&self.historico, &self.filtros, self.ordem_historico);
         if visiveis.is_empty() {
             let dica = if self.historico.is_empty() {
@@ -593,11 +617,9 @@ impl MoiraiView {
             } else {
                 "Nenhuma unidade passa nos filtros; desligue um chip."
             };
-            return coluna
-                .child(EmptyState::new("Sem unidades").hint(dica))
-                .into_any_element();
+            return pagina.child(EmptyState::new("Sem unidades").hint(dica).fill());
         }
-        let mut tabela = DataTable::new(colunas(&COLUNAS_HISTORICO));
+        let mut tabela = DataTable::new(colunas(&COLUNAS_HISTORICO)).fill("tabela-historico");
         for &i in &visiveis {
             tabela = tabela.row(
                 vm::celulas_historico(&self.historico[i])
@@ -626,12 +648,22 @@ impl MoiraiView {
                     cx.notify();
                 });
             });
-        coluna.child(tabela).into_any_element()
+        pagina.child(
+            Card::new()
+                .title("Unidades")
+                .meta(format!("{} de {}", visiveis.len(), self.historico.len()))
+                .fill()
+                .child(tabela),
+        )
     }
 
-    fn tela_teto(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+    fn tela_teto(&self, cx: &mut Context<Self>) -> Page {
         let entidade = cx.entity();
-        let mut cabecalho = PageHeader::new("Teto ao vivo");
+        let mut cabecalho = PageHeader::new("Teto ao vivo")
+            .subtitle("Custo real das unidades em execução contra o p75 estimado")
+            .description(
+                "Unidades de um plano aprovado aparecem aqui assim que o transcript ganha custo.",
+            );
         if let Some((aviso, pergunta)) = self.limiares {
             cabecalho = cabecalho.action(StatusBadge::new(
                 format!(
@@ -642,23 +674,19 @@ impl MoiraiView {
                 hades_ui::Tone::Neutral,
             ));
         }
-        let coluna = div().flex().flex_col().gap(px(space::LG)).child(cabecalho);
+        let pagina = Page::new("pagina-teto").header(cabecalho);
         if self.teto.is_empty() && self.t_teto.carregando() {
-            return coluna
-                .child(estado_carregando(
-                    "teto",
-                    "Lendo os transcripts das unidades em execução.",
-                ))
-                .into_any_element();
+            return pagina.child(estado_carregando(
+                "teto",
+                "Lendo os transcripts das unidades em execução.",
+            ));
         }
         if self.teto.is_empty() {
-            return coluna
-                .child(EmptyState::new("Nenhuma unidade em execução").hint(
-                    "Unidades de um plano aprovado aparecem aqui com o custo real contra o p75 estimado.",
-                ))
-                .into_any_element();
+            return pagina.child(EmptyState::new("Nenhuma unidade em execução").fill().hint(
+                "Unidades de um plano aprovado aparecem aqui com o custo real contra o p75 estimado.",
+            ));
         }
-        let mut tabela = DataTable::new(colunas(&COLUNAS_TETO));
+        let mut tabela = DataTable::new(colunas(&COLUNAS_TETO)).fill("tabela-teto");
         for l in &self.teto {
             tabela = tabela.row(vm::celulas_teto(l).into_iter().map(SharedString::from));
         }
@@ -671,69 +699,80 @@ impl MoiraiView {
                 cx.notify();
             });
         });
-        let mut medidores = div().flex().flex_col().gap(px(space::SM));
+        let mut medidores = Card::new()
+            .title("Uso do p75")
+            .meta(format!("{} unidades", self.teto.len().min(8)));
         for l in self.teto.iter().take(8) {
             let fracao = l.pct.map_or(0.0, |p| (p / 100.0).clamp(0.0, 1.0) as f32);
             medidores = medidores.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(space::SM))
-                    .child(div().w_1_4().child(l.unidade.clone()))
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Meter::new(fracao).tone(vm::tom_do_nivel(l.nivel))),
-                    )
-                    .child(StatusBadge::new(
-                        vm::rotulo_do_nivel(l.nivel),
-                        vm::tom_do_nivel(l.nivel),
-                    )),
+                Meter::new(fracao)
+                    .tone(vm::tom_do_nivel(l.nivel))
+                    .label(l.unidade.clone())
+                    .value(vm::rotulo_do_nivel(l.nivel)),
             );
         }
-        coluna.child(medidores).child(tabela).into_any_element()
+        pagina.child(medidores).child(
+            Card::new()
+                .title("Unidades em execução")
+                .meta(format!("{} no total", self.teto.len()))
+                .fill()
+                .child(tabela),
+        )
     }
 
-    fn tela_janelas(&self) -> gpui::AnyElement {
-        let cabecalho = PageHeader::new("Janelas");
-        let coluna = div().flex().flex_col().gap(px(space::LG)).child(cabecalho);
+    fn tela_janelas(&self) -> Page {
+        let cabecalho = PageHeader::new("Janelas")
+            .subtitle("Limites do plano de assinatura medidos pelo status line")
+            .description("Cada janela mostra o uso atual, quando renova e quanto o plano aberto deve acrescentar.");
+        let pagina = Page::new("pagina-janelas").header(cabecalho);
         let Some(limites) = &self.janelas else {
             if self.t_janelas.carregando() {
-                return coluna
-                    .child(estado_carregando(
-                        "janelas",
-                        "Relendo os transcripts para calibrar as janelas; a primeira leitura pode levar um minuto.",
-                    ))
-                    .into_any_element();
+                return pagina.child(estado_carregando(
+                    "janelas",
+                    "Relendo os transcripts para calibrar as janelas; a primeira leitura pode levar um minuto.",
+                ));
             }
-            return coluna
-                .child(EmptyState::new("Sem medida").hint(
-                    "Nenhuma leitura de janela do status line ainda; abra uma sessão do Claude Code.",
-                ))
-                .into_any_element();
+            return pagina.child(EmptyState::new("Sem medida").fill().hint(
+                "Nenhuma leitura de janela do status line ainda; abra uma sessão do Claude Code.",
+            ));
         };
-        let mut cartoes = div().flex().gap(px(space::MD));
+        let mut cartoes = div().flex().gap(px(space::LG));
         let mut atuais = Vec::new();
         for j in JANELAS {
             let limite = limites.get(j);
             let c = vm::cartao_da_janela(j, limite, self.agora_ms);
             atuais.push((j, limite.atual.as_ref()));
             cartoes = cartoes.child(
-                div().flex_1().child(
+                div().flex_1().min_w_0().child(
                     Card::new()
                         .title(format!("Janela de {}", j.rotulo()))
-                        .child(Meter::new(c.medidor.fracao).tone(c.medidor.tom))
-                        .child(c.medidor.texto)
-                        .child(c.renovacao)
-                        .child(c.plano),
+                        .meta(c.renovacao.clone())
+                        .child(
+                            Meter::new(c.medidor.fracao)
+                                .tone(c.medidor.tom)
+                                .label("Uso")
+                                .value(c.medidor.texto),
+                        )
+                        .child(
+                            MetaList::new()
+                                .row("Renovação", c.renovacao)
+                                .row("Plano aberto", c.plano),
+                        ),
                 ),
             );
         }
         let linha = vm::linha_das_janelas(&atuais);
-        coluna
-            .child(cartoes)
-            .child(TermBlock::new().line(linha))
-            .into_any_element()
+        pagina.child(cartoes).child(
+            Card::new()
+                .title("Linha de status")
+                .meta("a mesma que o terminal mostra")
+                .fill()
+                .child(
+                    TermBlock::new()
+                        .line(linha.clone())
+                        .copy("copiar-janelas", linha),
+                ),
+        )
     }
 }
 
@@ -778,8 +817,9 @@ fn colunas(nomes: &[&str]) -> Vec<(SharedString, Align)> {
 }
 
 impl Render for MoiraiView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = palette(cx);
+        window.set_window_title(&self.titulo());
         let (esquerda, direita) = self.rodape();
         let rail = self.rail(cx);
         let corpo = match self.tela {
@@ -802,15 +842,7 @@ impl Render for MoiraiView {
             .flex_col()
             .bg(p.bg)
             .text_color(p.fg)
-            .child(TopBar::new(self.titulo()).trailing("gpui"))
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .min_h_0()
-                    .child(rail)
-                    .child(div().flex_1().p(px(space::LG)).child(corpo)),
-            )
+            .child(div().flex_1().flex().min_h_0().child(rail).child(corpo))
             .child(StatusBar::new(esquerda, direita));
         if self.confirmando {
             let alvo = self

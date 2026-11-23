@@ -17,7 +17,7 @@ use hades_ui::components::{
 };
 use hades_ui::tokens::space;
 use hades_ui::{IconName, palette};
-use moirai_core::budget::MoiraiRoutes;
+use moirai_core::budget::{BudgetLevel, MoiraiRoutes};
 use moirai_core::limits::{JANELAS, LimitesDoPlano};
 use moirai_core::model::{HistoryUnit, Mode, Params};
 use notify::{RecursiveMode, Watcher};
@@ -43,6 +43,7 @@ pub struct MoiraiView {
     ordem_historico: Option<Ordem>,
     selecao_historico: Option<usize>,
     confirmando: bool,
+    recolhida: bool,
     aviso: Option<String>,
     foco: FocusHandle,
     painel: Arc<Mutex<MoiraiRoutes>>,
@@ -81,6 +82,7 @@ impl MoiraiView {
             ordem_historico: None,
             selecao_historico: None,
             confirmando: false,
+            recolhida: false,
             aviso: None,
             foco,
             painel: Arc::new(Mutex::new(service::novo_painel(&env, &cwd))),
@@ -384,30 +386,39 @@ impl MoiraiView {
         }
     }
 
-    fn rodape(&self) -> (String, String) {
+    /// Esquerda: aviso ou estado; meio: fonte do histórico; ponta: versão (`StatusBar::version`).
+    fn rodape(&self) -> (String, String, String) {
         let ocupado = self.t_historico.carregando()
             || self.t_estimar.carregando()
             || self.t_teto.carregando()
             || self.t_janelas.carregando()
             || self.profunda.estimando();
-        let esquerda = self.aviso.clone().unwrap_or_else(|| {
-            if ocupado {
-                "calculando…".to_owned()
-            } else {
-                format!("fonte: {} unidades encerradas", self.historico.len())
-            }
-        });
-        (esquerda, format!("moirai {}", env!("CARGO_PKG_VERSION")))
+        let esquerda = self
+            .aviso
+            .clone()
+            .unwrap_or_else(|| if ocupado { "calculando…" } else { "pronto" }.to_owned());
+        (
+            esquerda,
+            format!("fonte: {} unidades encerradas", self.historico.len()),
+            format!("moirai {}", env!("CARGO_PKG_VERSION")),
+        )
     }
 
     fn rail(&self, cx: &mut Context<Self>) -> Rail {
         let entidade = cx.entity();
         let item = |t: Tela, sub: &'static str| {
             let item = RailItem::new(t.rotulo()).icon(t.icone()).subtitle(sub);
-            if t == Tela::Historico {
-                item.badge(self.historico.len().to_string())
-            } else {
-                item
+            match t {
+                Tela::Historico => item.badge(self.historico.len().to_string()),
+                Tela::Teto if !self.teto.is_empty() => {
+                    let dentro = self
+                        .teto
+                        .iter()
+                        .filter(|l| matches!(l.nivel, Some(BudgetLevel::Ok)))
+                        .count();
+                    item.count(dentro, self.teto.len())
+                }
+                _ => item,
             }
         };
         let plano = RailGroup::new(
@@ -426,7 +437,18 @@ impl MoiraiView {
         );
         Rail::new([plano, medicao])
             .brand(RailBrand::new("Moirai").subtitle("planos e estimativas"))
-            .footer(self.rodape_do_rail())
+            .stat(self.rodape_do_rail())
+            .theme_toggle()
+            .collapsed(self.recolhida)
+            .on_collapse({
+                let entidade = entidade.clone();
+                move |recolhida, _, cx| {
+                    entidade.update(cx, |v, cx| {
+                        v.recolhida = recolhida;
+                        cx.notify();
+                    });
+                }
+            })
             .selected(self.tela.rotulo())
             .on_select(move |rotulo, _, cx| {
                 if let Some(t) = Tela::de_rotulo(rotulo) {
@@ -819,7 +841,7 @@ impl Render for MoiraiView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = palette(cx);
         window.set_window_title(&self.titulo());
-        let (esquerda, direita) = self.rodape();
+        let (esquerda, fonte, versao) = self.rodape();
         let rail = self.rail(cx);
         let corpo = match self.tela {
             Tela::Estimar => self.tela_estimar(cx),
@@ -842,7 +864,7 @@ impl Render for MoiraiView {
             .bg(p.bg)
             .text_color(p.fg)
             .child(div().flex_1().flex().min_h_0().child(rail).child(corpo))
-            .child(StatusBar::new(esquerda, direita));
+            .child(StatusBar::new(esquerda, fonte).version(versao));
         if self.confirmando {
             let alvo = self
                 .plano

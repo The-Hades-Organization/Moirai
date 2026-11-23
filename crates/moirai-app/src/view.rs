@@ -12,11 +12,11 @@ use gpui::{
 use hades_core::Env;
 use hades_ui::components::{
     Align, Button, Card, Confirm, DataTable, EmptyState, FilterBar, Kpi, KpiStrip, Meter,
-    PageHeader, PathField, Rail, RailGroup, RailItem, Segmented, Skeleton, SortDirection, Spinner,
-    StatusBadge, StatusBar, TermBlock, TopBar,
+    PageHeader, PathField, Rail, RailBrand, RailGroup, RailItem, Segmented, Skeleton,
+    SortDirection, Spinner, StatusBadge, StatusBar, TermBlock, TopBar,
 };
-use hades_ui::palette;
 use hades_ui::tokens::space;
+use hades_ui::{IconName, palette};
 use moirai_core::budget::MoiraiRoutes;
 use moirai_core::limits::{JANELAS, LimitesDoPlano};
 use moirai_core::model::{HistoryUnit, Mode, Params};
@@ -402,7 +402,7 @@ impl MoiraiView {
     fn rail(&self, cx: &mut Context<Self>) -> Rail {
         let entidade = cx.entity();
         let item = |t: Tela| {
-            let item = RailItem::new(t.rotulo());
+            let item = RailItem::new(t.rotulo()).icon(t.icone());
             if t == Tela::Historico {
                 item.badge(self.historico.len().to_string())
             } else {
@@ -412,6 +412,7 @@ impl MoiraiView {
         let plano = RailGroup::new("Plano", [item(Tela::Estimar), item(Tela::Historico)]);
         let medicao = RailGroup::new("Medição", [item(Tela::Teto), item(Tela::Janelas)]);
         Rail::new([plano, medicao])
+            .brand(RailBrand::hades().subtitle("Moirai"))
             .selected(self.tela.rotulo())
             .on_select(move |rotulo, _, cx| {
                 if let Some(t) = Tela::de_rotulo(rotulo) {
@@ -432,18 +433,23 @@ impl MoiraiView {
         let pode_gravar = self.estimativa.is_some();
         let deep = if self.plano.is_none() {
             Button::new("profunda", "Profunda")
+                .icon(IconName::ScanSearch)
                 .disabled("Abra um plano para estimar em profundidade")
         } else if self.profunda.estimando() {
             Button::new("profunda", "Estimando…")
+                .icon(IconName::ScanSearch)
                 .loading(true)
                 .disabled("A estimativa profunda está rodando")
         } else {
             let e = entidade.clone();
             Button::new("profunda", "Profunda")
+                .icon(IconName::ScanSearch)
                 .on_click(move |_, _, cx| e.update(cx, |v, cx| v.rodar_profunda(cx)))
         };
         let gravar = {
-            let b = Button::new("gravar", "Gravar no plano").primary();
+            let b = Button::new("gravar", "Gravar no plano")
+                .icon(IconName::Save)
+                .primary();
             if pode_gravar {
                 let e = entidade.clone();
                 b.on_click(move |_, _, cx| e.update(cx, |v, cx| v.pedir_confirmacao(cx)))
@@ -837,12 +843,21 @@ impl Render for MoiraiView {
 }
 
 pub fn abrir_janela(cx: &mut App) {
+    abrir_janela_em(cx, None);
+}
+
+/// Abre a janela já na `tela` pedida, ou em Estimar plano.
+pub fn abrir_janela_em(cx: &mut App, tela: Option<Tela>) {
     let aberta = cx.open_window(gpui::WindowOptions::default(), |window, cx| {
         window.set_window_title(crate::NOME);
         let cwd = std::env::current_dir().unwrap_or_default();
         let view: Entity<MoiraiView> = cx.new(|cx| {
             MoiraiView::iniciar(cx);
-            MoiraiView::new(Env::from_process(), cwd, cx.focus_handle(), cx)
+            let mut v = MoiraiView::new(Env::from_process(), cwd, cx.focus_handle(), cx);
+            if let Some(t) = tela {
+                v.mudar_tela(t, cx);
+            }
+            v
         });
         view
     });

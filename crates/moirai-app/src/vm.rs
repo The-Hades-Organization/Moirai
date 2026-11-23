@@ -27,6 +27,28 @@ impl Tela {
         }
     }
 
+    /// Ícone do painel web para a página equivalente: Consumo (Coins), Gauge de "Contexto e espera".
+    pub fn icone(self) -> hades_ui::IconName {
+        use hades_ui::IconName;
+        match self {
+            Tela::Estimar => IconName::Coins,
+            Tela::Historico => IconName::History,
+            Tela::Teto => IconName::Gauge,
+            Tela::Janelas => IconName::Clock,
+        }
+    }
+
+    /// Nome curto da flag `--tela`.
+    pub fn de_nome(nome: &str) -> Option<Tela> {
+        match nome {
+            "estimar" => Some(Tela::Estimar),
+            "historico" => Some(Tela::Historico),
+            "teto" => Some(Tela::Teto),
+            "janelas" => Some(Tela::Janelas),
+            _ => None,
+        }
+    }
+
     pub fn de_rotulo(rotulo: &str) -> Option<Tela> {
         Tela::TODAS.into_iter().find(|t| t.rotulo() == rotulo)
     }

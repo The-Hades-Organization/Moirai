@@ -854,6 +854,15 @@ pub fn abrir_janela_em(cx: &mut App, tela: Option<Tela>) {
         let view: Entity<MoiraiView> = cx.new(|cx| {
             MoiraiView::iniciar(cx);
             let mut v = MoiraiView::new(Env::from_process(), cwd, cx.focus_handle(), cx);
+            let mut args = std::env::args();
+            if let Some(plano) = args
+                .by_ref()
+                .skip_while(|a| a != "--plano")
+                .nth(1)
+                .map(PathBuf::from)
+            {
+                v.abrir_plano(plano, cx);
+            }
             if let Some(t) = tela {
                 v.mudar_tela(t, cx);
             }

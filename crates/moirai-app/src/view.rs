@@ -102,6 +102,7 @@ impl MoiraiView {
             cwd,
         };
         view.recarregar_historico(cx);
+        view.atualizar_janelas(cx);
         view
     }
 
@@ -701,7 +702,7 @@ impl MoiraiView {
         });
         let mut medidores = Card::new()
             .title("Uso do p75")
-            .meta(format!("{} unidades", self.teto.len().min(8)));
+            .meta(format!("{} mais recentes", self.teto.len().min(8)));
         for l in self.teto.iter().take(8) {
             let fracao = l.pct.map_or(0.0, |p| (p / 100.0).clamp(0.0, 1.0) as f32);
             medidores = medidores.child(
@@ -746,7 +747,6 @@ impl MoiraiView {
                 div().flex_1().min_w_0().child(
                     Card::new()
                         .title(format!("Janela de {}", j.rotulo()))
-                        .meta(c.renovacao.clone())
                         .child(
                             Meter::new(c.medidor.fracao)
                                 .tone(c.medidor.tom)
@@ -766,7 +766,6 @@ impl MoiraiView {
             Card::new()
                 .title("Linha de status")
                 .meta("a mesma que o terminal mostra")
-                .fill()
                 .child(
                     TermBlock::new()
                         .line(linha.clone())
